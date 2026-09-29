@@ -690,6 +690,17 @@ window.addEventListener('load', function() {
     checkServerConfig();
 });
 
+function versionCompare(v1, v2) {
+    var a = v1.split('.').map(Number);
+    var b = v2.split('.').map(Number);
+    for (var i = 0; i < Math.max(a.length, b.length); i++) {
+        var n1 = a[i] || 0, n2 = b[i] || 0;
+        if (n1 > n2) return 1;
+        if (n1 < n2) return -1;
+    }
+    return 0;
+}
+
 function checkServerConfig() {
     var xhr = new XMLHttpRequest();
     xhr.open('GET', API_BASE + '/ai_edit.php?action=config', true);
@@ -706,7 +717,7 @@ function checkServerConfig() {
                 var btn = document.getElementById('generateBtn');
                 if (btn) { btn.disabled = true; btn.textContent = '生成已暂停'; btn.style.opacity = '0.5'; }
             }
-            if (cfg.min_version && cfg.min_version !== APP_VERSION) {
+            if (cfg.min_version && versionCompare(APP_VERSION, cfg.min_version) < 0) {
                 showUpdateModal(cfg.update_url || '');
                 return;
             }
