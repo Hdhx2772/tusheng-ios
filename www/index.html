@@ -414,49 +414,6 @@ var resultImageUrl = null;
 var currentHistoryIndex = -1;
 var API_BASE = 'https://wutong.xyz';
 var APP_VERSION = '1.1';
-var API_SECRET = 'ts_ww_2024_a9f8e7d6c5b4';
-
-// 简单哈希（用于签名）
-function simpleHash(str) {
-    var hash = 0;
-    for (var i = 0; i < str.length; i++) {
-        var char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
-    }
-    return Math.abs(hash).toString(36);
-}
-
-// 生成签名
-function genSign(timestamp, deviceId) {
-    return simpleHash(timestamp + '_' + deviceId + '_' + API_SECRET);
-}
-
-// 加密数据（异或 + Base64）
-function encryptData(data) {
-    var json = JSON.stringify(data);
-    var bytes = new TextEncoder().encode(json);
-    var key = API_SECRET;
-    for (var i = 0; i < bytes.length; i++) {
-        bytes[i] = bytes[i] ^ key.charCodeAt(i % key.length);
-    }
-    var binary = '';
-    for (var i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);
-}
-
-// 给 URL 加签名参数
-function signUrl(url, params) {
-    var ts = Math.floor(Date.now() / 1000);
-    var dev = getDeviceCode();
-    var sign = genSign(ts, dev);
-    var d = encryptData(params || {});
-    var sep = url.indexOf('?') >= 0 ? '&' : '?';
-    return url + sep + 'ts=' + ts + '&sign=' + sign + '&d=' + encodeURIComponent(d);
-}
-
 function showToast(msg, dur) {
     dur = dur || 2000;
     var t = document.getElementById('toast');
@@ -544,9 +501,6 @@ function submitEdit() {
     if (!prompt) { showToast('请输入修改描述'); return; }
     var devCode = getDeviceCode();
     showToast('检查授权...', 1000);
-    var ts = Math.floor(Date.now() / 1000);
-    var sign = genSign(ts, devCode);
-    var encData = encryptData({action: 'check_auth', device_id: devCode});
     var xhrAuth = new XMLHttpRequest();
     xhrAuth.open('POST', API_BASE + '/api_ai_record.php', true);
     xhrAuth.timeout = 15000;
@@ -563,9 +517,8 @@ function submitEdit() {
     xhrAuth.onerror = function() { showToast('授权网络异常，请检查网络'); };
     xhrAuth.ontimeout = function() { showToast('授权检查超时，请重试'); };
     var fdAuth = new FormData();
-    fdAuth.append('ts', ts);
-    fdAuth.append('sign', sign);
-    fdAuth.append('d', encData);
+    fdAuth.append('action', 'check_auth');
+    fdAuth.append('device_id', devCode);
     xhrAuth.send(fdAuth);
 }
 
@@ -577,15 +530,9 @@ function doGenerate(prompt) {
     document.getElementById('loadingCard').classList.add('show');
     setLoading('正在上传图片...', '');
     var startTime = Date.now();
-    var devCode = getDeviceCode();
-    var ts = Math.floor(Date.now() / 1000);
-    var sign = genSign(ts, devCode);
-    var encData = encryptData({prompt: prompt, device_id: devCode});
     var fd = new FormData();
     fd.append('image', selectedFile);
-    fd.append('ts', ts);
-    fd.append('sign', sign);
-    fd.append('d', encData);
+    fd.append('prompt', prompt);
     debugLog('开始上传图片...');
     var xhrUpload = new XMLHttpRequest();
     xhrUpload.open('POST', API_BASE + '/ai_edit.php', true);
@@ -604,11 +551,8 @@ function doGenerate(prompt) {
             function poll() {
                 pollCount++;
                 debugLog('轮询第' + pollCount + '次 taskId=' + taskId);
-                var pollTs = Math.floor(Date.now() / 1000);
-                var pollSign = genSign(pollTs, getDeviceCode());
-                var pollData = encryptData({action: 'status', taskId: taskId});
                 var xhrPoll = new XMLHttpRequest();
-                xhrPoll.open('GET', API_BASE + '/ai_edit.php?ts=' + pollTs + '&sign=' + pollSign + '&d=' + encodeURIComponent(pollData), true);
+                xhrPoll.open('GET', API_BASE + '/ai_edit.php?action=status&taskId=' + encodeURIComponent(taskId), true);
                 xhrPoll.timeout = 30000;
                 xhrPoll.onload = function() {
                     var raw2 = xhrPoll.responseText;
@@ -971,11 +915,8 @@ function versionCompare(v1, v2) {
 }
 
 function checkServerConfig() {
-    var cfgTs = Math.floor(Date.now() / 1000);
-    var cfgSign = genSign(cfgTs, getDeviceCode());
-    var cfgData = encryptData({action: 'config'});
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', API_BASE + '/ai_edit.php?ts=' + cfgTs + '&sign=' + cfgSign + '&d=' + encodeURIComponent(cfgData), true);
+    xhr.open('GET', API_BASE + '/ai_edit.php?action=config', true);
     xhr.timeout = 10000;
     xhr.onload = function() {
         try {
