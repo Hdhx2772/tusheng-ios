@@ -132,7 +132,7 @@ body {
     position: relative; width: 100%; flex: 1; min-height: 150px; border-radius: 12px;
     overflow: hidden; background: #f5f5f7; touch-action: none; box-shadow: inset 0 0 0 1px var(--border);
 }
-.result-after { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
+.result-after { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; transition: opacity 0.3s ease; }
 .result-before-wrap { position: absolute; top: 0; left: 0; height: 100%; width: 50%; overflow: hidden; }
 .result-before { position: absolute; top: 0; left: 0; height: 100%; object-fit: contain; }
 .result-handle {
@@ -305,8 +305,9 @@ body {
             <div class="result-hint" id="resultHint">左右滑动对比</div>
         </div>
         <div class="result-actions">
-            <button class="btn btn-success" onclick="downloadResult()">保存</button>
-            <button class="btn btn-secondary" onclick="resetAll()">重新创作</button>
+            <button class="btn btn-success" onclick="saveToAlbum()">保存到相册</button>
+            <button class="btn btn-secondary" onclick="continueCreate()">继续创作</button>
+            <button class="btn btn-secondary" onclick="resetAll()">重新开始</button>
         </div>
     </div>
 </div>
@@ -400,6 +401,7 @@ body {
         <div class="modal-body" id="modalPrompt" style="font-size:13px;max-height:60px;overflow-y:auto;"></div>
         <div class="modal-actions">
             <button class="btn btn-success" onclick="saveFromHistory()">保存</button>
+            <button class="btn btn-secondary" onclick="continueFromHistory()">继续创作</button>
             <button class="btn btn-danger" onclick="deleteFromHistory()">删除</button>
             <button class="btn btn-secondary" onclick="closeModal()">关闭</button>
         </div>
@@ -408,10 +410,50 @@ body {
 
 <script>
 var selectedFile = null;
+var originalImageData = null;
+var lastPrompt = '';
 var resultImageUrl = null;
 var currentHistoryIndex = -1;
 var API_BASE = 'https://wutong.xyz';
 var APP_VERSION = '1.1';
+var API_SECRET = 'ts_ww_2024_a9f8e7d6c5b4';
+
+// 简单哈希（用于签名）
+function simpleHash(str) {
+    var hash = 0;
+    for (var i = 0; i < str.length; i++) {
+        var char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+}
+
+// 生成签名
+function genSign(timestamp, deviceId) {
+    return simpleHash(timestamp + '_' + deviceId + '_' + API_SECRET);
+}
+
+// 加密数据（异或 + Base64）
+function encryptData(data) {
+    var json = JSON.stringify(data);
+    var key = API_SECRET;
+    var result = '';
+    for (var i = 0; i < json.length; i++) {
+        result += String.fromCharCode(json.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+    }
+    return btoa(unescape(encodeURIComponent(result)));
+}
+
+// 给 URL 加签名参数
+function signUrl(url, params) {
+    var ts = Math.floor(Date.now() / 1000);
+    var dev = getDeviceCode();
+    var sign = genSign(ts, dev);
+    var d = encryptData(params || {});
+    var sep = url.indexOf('?') >= 0 ? '&' : '?';
+    return url + sep + 'ts=' + ts + '&sign=' + sign + '&d=' + encodeURIComponent(d);
+}
 
 function showToast(msg, dur) {
     dur = dur || 2000;
@@ -444,6 +486,7 @@ function handleFile(file) {
     selectedFile = file;
     var reader = new FileReader();
     reader.onload = function(e) {
+        originalImageData = e.target.result;
         document.getElementById('previewImg').src = e.target.result;
         document.getElementById('uploadCard').style.display = 'none';
         document.getElementById('previewCard').classList.add('show');
@@ -483,6 +526,9 @@ function submitEdit() {
     if (!prompt) { showToast('请输入修改描述'); return; }
     var devCode = getDeviceCode();
     showToast('检查授权...', 1000);
+    var ts = Math.floor(Date.now() / 1000);
+    var sign = genSign(ts, devCode);
+    var encData = encryptData({action: 'check_auth', device_id: devCode});
     var xhrAuth = new XMLHttpRequest();
     xhrAuth.open('POST', API_BASE + '/api_ai_record.php', true);
     xhrAuth.timeout = 15000;
@@ -499,8 +545,9 @@ function submitEdit() {
     xhrAuth.onerror = function() { showToast('授权网络异常，请检查网络'); };
     xhrAuth.ontimeout = function() { showToast('授权检查超时，请重试'); };
     var fdAuth = new FormData();
-    fdAuth.append('action', 'check_auth');
-    fdAuth.append('device_id', devCode);
+    fdAuth.append('ts', ts);
+    fdAuth.append('sign', sign);
+    fdAuth.append('d', encData);
     xhrAuth.send(fdAuth);
 }
 
@@ -512,9 +559,15 @@ function doGenerate(prompt) {
     document.getElementById('loadingCard').classList.add('show');
     setLoading('正在上传图片...', '');
     var startTime = Date.now();
+    var devCode = getDeviceCode();
+    var ts = Math.floor(Date.now() / 1000);
+    var sign = genSign(ts, devCode);
+    var encData = encryptData({prompt: prompt});
     var fd = new FormData();
     fd.append('image', selectedFile);
-    fd.append('prompt', prompt);
+    fd.append('ts', ts);
+    fd.append('sign', sign);
+    fd.append('d', encData);
     debugLog('开始上传图片...');
     var xhrUpload = new XMLHttpRequest();
     xhrUpload.open('POST', API_BASE + '/ai_edit.php', true);
@@ -533,8 +586,11 @@ function doGenerate(prompt) {
             function poll() {
                 pollCount++;
                 debugLog('轮询第' + pollCount + '次 taskId=' + taskId);
+                var pollTs = Math.floor(Date.now() / 1000);
+                var pollSign = genSign(pollTs, getDeviceCode());
+                var pollData = encryptData({action: 'status', taskId: taskId});
                 var xhrPoll = new XMLHttpRequest();
-                xhrPoll.open('GET', API_BASE + '/ai_edit.php?action=status&taskId=' + encodeURIComponent(taskId), true);
+                xhrPoll.open('GET', API_BASE + '/ai_edit.php?ts=' + pollTs + '&sign=' + pollSign + '&d=' + encodeURIComponent(pollData), true);
                 xhrPoll.timeout = 30000;
                 xhrPoll.onload = function() {
                     var raw2 = xhrPoll.responseText;
@@ -633,20 +689,38 @@ function closeBanModal() { document.getElementById('banModal').classList.remove(
 
 function showResult(url) {
     resultImageUrl = url;
+    lastPrompt = document.getElementById('promptInput').value.trim();
     document.getElementById('loadingCard').classList.remove('show');
     document.getElementById('resultCard').classList.add('show');
-    document.getElementById('resultAfter').src = url;
-    document.getElementById('resultBefore').src = document.getElementById('previewImg').src;
+    
+    var afterImg = document.getElementById('resultAfter');
+    var beforeImg = document.getElementById('resultBefore');
+    
+    // 设置 before 图片（原图）
+    if (originalImageData) {
+        beforeImg.src = originalImageData;
+    }
+    
+    // 设置 after 图片（结果），加加载状态
+    afterImg.style.opacity = '0.3';
+    afterImg.onload = function() {
+        this.style.opacity = '1';
+        // 图片加载完成后设置 before 宽度
+        setTimeout(function() {
+            var slider = document.getElementById('resultSlider');
+            if (slider && beforeImg) {
+                beforeImg.style.width = slider.offsetWidth + 'px';
+            }
+        }, 50);
+    };
+    afterImg.onerror = function() {
+        this.style.opacity = '1';
+        showToast('图片加载失败，请重试', 3000);
+    };
+    afterImg.src = url;
+    
     document.getElementById('resultBeforeWrap').style.width = '50%';
     document.getElementById('resultHandle').style.left = '50%';
-    // 修复：设置 before 图片宽度为 slider 宽度，避免跟着动
-    setTimeout(function() {
-        var slider = document.getElementById('resultSlider');
-        var beforeImg = document.getElementById('resultBefore');
-        if (slider && beforeImg) {
-            beforeImg.style.width = slider.offsetWidth + 'px';
-        }
-    }, 50);
     initSlider();
 }
 
@@ -697,6 +771,53 @@ function initSlider() {
 
 function downloadResult() {
     if (resultImageUrl) { window.open(resultImageUrl); showToast('已开始下载'); }
+}
+
+// 保存到相册
+function saveToAlbum() {
+    if (!resultImageUrl) { showToast('没有可保存的图片'); return; }
+    showToast('正在保存...', 1500);
+    
+    // 尝试用 fetch 下载然后保存
+    fetch(resultImageUrl)
+        .then(function(res) { return res.blob(); })
+        .then(function(blob) {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = '图生万物_' + Date.now() + '.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('已保存到相册', 2000);
+        })
+        .catch(function() {
+            // 失败则用旧方法
+            window.open(resultImageUrl);
+            showToast('长按图片保存', 2000);
+        });
+}
+
+// 继续创作（保留图片和提示词）
+function continueCreate() {
+    document.getElementById('resultCard').classList.remove('show');
+    document.getElementById('uploadCard').style.display = 'none';
+    document.getElementById('previewCard').classList.add('show');
+    document.getElementById('inputCard').style.display = 'block';
+    document.getElementById('generateBtn').style.display = 'block';
+    
+    // 恢复原图和提示词
+    if (originalImageData) {
+        document.getElementById('previewImg').src = originalImageData;
+    }
+    if (lastPrompt) {
+        document.getElementById('promptInput').value = lastPrompt;
+    }
+    
+    // 切换到创作 tab
+    switchTab('create');
+    showToast('已保留图片和提示词', 1500);
 }
 
 function resetAll() {
@@ -751,6 +872,42 @@ function deleteFromHistory() {
     showToast('已删除');
 }
 
+// 从历史记录继续创作
+function continueFromHistory() {
+    var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
+    var item = hist[currentHistoryIndex];
+    if (!item) { showToast('记录不存在'); return; }
+    
+    closeModal();
+    showToast('正在加载图片...', 1500);
+    
+    // 下载图片转成 File
+    fetch(item.imagePath)
+        .then(function(res) { return res.blob(); })
+        .then(function(blob) {
+            var file = new File([blob], 'history_' + Date.now() + '.png', { type: 'image/png' });
+            selectedFile = file;
+            
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                originalImageData = e.target.result;
+                document.getElementById('previewImg').src = e.target.result;
+                document.getElementById('uploadCard').style.display = 'none';
+                document.getElementById('previewCard').classList.add('show');
+                document.getElementById('inputCard').style.display = 'block';
+                document.getElementById('generateBtn').style.display = 'block';
+                document.getElementById('promptInput').value = item.prompt || '';
+                lastPrompt = item.prompt || '';
+                switchTab('create');
+                showToast('已加载图片和提示词', 1500);
+            };
+            reader.readAsDataURL(file);
+        })
+        .catch(function() {
+            showToast('图片加载失败', 2000);
+        });
+}
+
 function clearHistory() {
     showConfirm('确定清空所有历史记录吗？', function(){
         localStorage.removeItem('edit_history');
@@ -796,8 +953,11 @@ function versionCompare(v1, v2) {
 }
 
 function checkServerConfig() {
+    var cfgTs = Math.floor(Date.now() / 1000);
+    var cfgSign = genSign(cfgTs, getDeviceCode());
+    var cfgData = encryptData({action: 'config'});
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', API_BASE + '/ai_edit.php?action=config', true);
+    xhr.open('GET', API_BASE + '/ai_edit.php?ts=' + cfgTs + '&sign=' + cfgSign + '&d=' + encodeURIComponent(cfgData), true);
     xhr.timeout = 10000;
     xhr.onload = function() {
         try {
