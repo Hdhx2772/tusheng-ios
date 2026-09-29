@@ -148,24 +148,25 @@ body {
 .history-empty { text-align: center; padding: 60px 20px; color: var(--text-secondary); grid-column: 1/-1; font-size: 15px; }
 /* Tab Bar - 毛玻璃 */
 .tab-bar {
-    height: 56px; background: rgba(255,255,255,0.15); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
-    border-top: 0.5px solid rgba(255,255,255,0.25); display: flex; flex-shrink: 0;
+    height: 52px; background: rgba(0,0,0,0.45); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+    border-top: 0.5px solid rgba(255,255,255,0.15); display: flex; flex-shrink: 0;
     padding-bottom: env(safe-area-inset-bottom); z-index: 100;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.2);
 }
 .tab-item {
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 3px; cursor: pointer; color: rgba(255,255,255,0.55); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
+    gap: 4px; cursor: pointer; color: rgba(255,255,255,0.5); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative; padding-top: 6px;
 }
 .tab-item.active { color: #fff; }
 .tab-item.active::before {
     content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-    width: 32px; height: 3px; background: #fff; border-radius: 0 0 3px 3px;
+    width: 28px; height: 3px; background: #fff; border-radius: 0 0 3px 3px;
 }
-.tab-item:active { opacity: 0.7; transform: scale(0.95); }
-.tab-item svg { width: 24px; height: 24px; }
-.tab-item span { font-size: 11px; font-weight: 600; letter-spacing: 0.3px; }
+.tab-item:active { opacity: 0.8; transform: scale(0.92); }
+.tab-item svg { width: 22px; height: 22px; stroke-width: 2.5; }
+.tab-item.active svg { stroke-width: 2.8; }
+.tab-item span { font-size: 10px; font-weight: 600; letter-spacing: 0.2px; }
 /* 弹窗 */
 .modal-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
