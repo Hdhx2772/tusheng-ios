@@ -3,16 +3,15 @@
   "appName": "图生万物",
   "webDir": "www",
   "server": {
-    "url": "https://wutong.xyz/ai_edit.html",
-    "cleartext": false,
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "allowNavigation": ["wutong.xyz", "*.wutong.xyz"]
   },
   "ios": {
     "contentInset": "always"
   },
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 2000,
+      "launchShowDuration": 1000,
       "backgroundColor": "#f2f2f7"
     }
   }
