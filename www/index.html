@@ -20,7 +20,7 @@
 html, body { height: 100%; }
 body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
-    background: linear-gradient(180deg, #e8e8ed 0%, #f2f2f7 30%, #f2f2f7 100%);
+    background: linear-gradient(180deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
     color: var(--text); height: 100vh; overflow: hidden;
     display: flex; flex-direction: column;
     padding-top: env(safe-area-inset-top);
@@ -29,16 +29,16 @@ body {
 /* 导航栏 - 毛玻璃 */
 .nav-bar {
     height: 44px; display: flex; align-items: center; justify-content: center;
-    background: rgba(242,242,247,0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    border-bottom: 0.5px solid var(--border); flex-shrink: 0; z-index: 100;
-    font-size: 17px; font-weight: 600; letter-spacing: -0.2px;
+    background: rgba(0,0,0,0.3); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-bottom: 0.5px solid rgba(255,255,255,0.2); flex-shrink: 0; z-index: 100;
+    font-size: 17px; font-weight: 600; letter-spacing: -0.2px; color: #fff;
 }
 /* 主内容区 */
-.content { flex: 1; display: flex; flex-direction: column; padding: 10px 12px; gap: 8px; overflow: hidden; }
+.content { flex: 1; display: flex; flex-direction: column; padding: 8px 10px; gap: 6px; overflow: hidden; }
 /* 卡片 - 精致阴影 */
 .card {
     background: var(--card); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border-radius: 16px; padding: 14px; box-shadow: var(--shadow);
+    border-radius: 14px; padding: 10px; box-shadow: var(--shadow);
     border: 0.5px solid rgba(255,255,255,0.8);
 }
 /* 上传区域 */
@@ -77,7 +77,7 @@ body {
 .chip:active { background: rgba(0,122,255,0.15); transform: scale(0.95); }
 /* 按钮 - 渐变+阴影 */
 .btn {
-    padding: 13px; border-radius: 14px; font-size: 16px; font-weight: 600;
+    padding: 11px; border-radius: 12px; font-size: 15px; font-weight: 600;
     border: none; cursor: pointer; font-family: inherit; flex-shrink: 0;
     transition: all 0.15s ease; letter-spacing: -0.2px;
 }
@@ -145,15 +145,15 @@ body {
 .history-empty { text-align: center; padding: 60px 20px; color: var(--text-secondary); grid-column: 1/-1; font-size: 15px; }
 /* Tab Bar - 毛玻璃 */
 .tab-bar {
-    height: 49px; background: rgba(249,249,249,0.88); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    border-top: 0.5px solid var(--border); display: flex; flex-shrink: 0;
+    height: 49px; background: rgba(0,0,0,0.3); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-top: 0.5px solid rgba(255,255,255,0.2); display: flex; flex-shrink: 0;
     padding-bottom: env(safe-area-inset-bottom); z-index: 100;
 }
 .tab-item {
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 2px; cursor: pointer; color: var(--text-secondary); transition: all 0.15s ease;
+    gap: 2px; cursor: pointer; color: rgba(255,255,255,0.6); transition: all 0.15s ease;
 }
-.tab-item.active { color: var(--accent); }
+.tab-item.active { color: #fff; }
 .tab-item:active { opacity: 0.6; }
 .tab-item svg { width: 26px; height: 26px; }
 .tab-item span { font-size: 10px; font-weight: 500; }
