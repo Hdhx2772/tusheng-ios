@@ -924,25 +924,45 @@ function saveToAlbum() {
     if (!resultImageUrl) { showToast('没有可保存的图片'); return; }
     showToast('正在保存...', 1500);
     
-    // 尝试用 fetch 下载然后保存
-    fetch(resultImageUrl)
-        .then(function(res) { return res.blob(); })
-        .then(function(blob) {
-            var url = URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = '图生万物_' + Date.now() + '.png';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            showToast('已保存到相册', 2000);
-        })
-        .catch(function() {
-            // 失败则用旧方法
-            window.open(resultImageUrl);
-            showToast('长按图片保存', 2000);
-        });
+    // 用 XHR 下载图片转 base64
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', resultImageUrl, true);
+    xhr.responseType = 'blob';
+    xhr.timeout = 30000;
+    xhr.onload = function() {
+        if (xhr.status !== 200) {
+            showToast('下载失败，请重试', 2000);
+            return;
+        }
+        var blob = xhr.response;
+        var reader = new FileReader();
+        reader.onloadend = function() {
+            var base64 = reader.result;
+            // 调用原生插件保存到相册
+            if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.PhotoSaver) {
+                Capacitor.Plugins.PhotoSaver.saveImage({ base64: base64 })
+                    .then(function() {
+                        showToast('已保存到相册', 2000);
+                    })
+                    .catch(function(err) {
+                        showToast('保存失败: ' + (err.message || err), 3000);
+                    });
+            } else {
+                // 降级：用 a 标签下载
+                var a = document.createElement('a');
+                a.href = base64;
+                a.download = '图生万物_' + Date.now() + '.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                showToast('已开始下载', 2000);
+            }
+        };
+        reader.readAsDataURL(blob);
+    };
+    xhr.onerror = function() { showToast('网络异常，请重试', 2000); };
+    xhr.ontimeout = function() { showToast('下载超时，请重试', 2000); };
+    xhr.send();
 }
 
 // 继续创作（保留图片和提示词）
