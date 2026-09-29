@@ -416,6 +416,7 @@ var currentPrompt = '';
 var generationStartTime = 0;
 var isGenerating = false;
 var pollCount = 0;
+var historySaved = false; // 防止重复保存历史记录
 var API_BASE = 'https://wutong.xyz';
 var APP_VERSION = '1.1';
 function showToast(msg, dur) {
@@ -607,6 +608,7 @@ function doGenerate(prompt) {
     generationStartTime = Date.now();
     currentPrompt = prompt;
     isGenerating = true;
+    historySaved = false;
     var fd = new FormData();
     fd.append('image', selectedFile);
     fd.append('prompt', prompt);
@@ -656,9 +658,13 @@ function pollTaskStatus() {
                 var resultUrl = sData.image || sData.result_url || sData.output_url || sData.image_url || sData.url || (sData.images && sData.images[0]) || '';
                 debugLog('结果URL: ' + resultUrl + ' 完整响应: ' + JSON.stringify(sData).substring(0,300));
                 if (!resultUrl) { showToast('未获取到结果图片', 3000); resetUI(); return; }
-                var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
-                hist.unshift({ prompt: currentPrompt, imagePath: resultUrl });
-                localStorage.setItem('edit_history', JSON.stringify(hist.slice(0,50)));
+                // 防止重复保存
+                if (!historySaved) {
+                    historySaved = true;
+                    var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
+                    hist.unshift({ prompt: currentPrompt, imagePath: resultUrl });
+                    localStorage.setItem('edit_history', JSON.stringify(hist.slice(0,50)));
+                }
                 // 上传记录到服务器
                 try {
                     var recXhr = new XMLHttpRequest();
@@ -762,6 +768,11 @@ function debugLog(msg) {
 var titleClickCount = 0;
 var titleClickTimer = null;
 document.addEventListener('DOMContentLoaded', function() {
+    // 请求通知权限
+    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Notifier) {
+        Capacitor.Plugins.Notifier.requestPermission().catch(function() {});
+    }
+    
     var navBar = document.querySelector('.nav-bar');
     if (navBar) {
         navBar.style.cursor = 'pointer';
@@ -814,58 +825,78 @@ function showResult(url) {
     resultImageUrl = url;
     lastPrompt = document.getElementById('promptInput').value.trim();
     
-    // 先预加载图片，加载完成后再显示结果页
-    setLoading('正在加载结果...', '');
+    // 先预加载图片，加载完成后再延迟 2.5 秒让图片渲染，然后显示结果页
+    setLoading('AI 正在处理...', '');
     var preloadImg = new Image();
     preloadImg.crossOrigin = 'anonymous';
     preloadImg.onload = function() {
-        // 图片加载完成，显示结果页
-        document.getElementById('loadingCard').classList.remove('show');
-        document.getElementById('resultCard').classList.add('show');
-        
-        var afterImg = document.getElementById('resultAfter');
-        var beforeImg = document.getElementById('resultBefore');
-        var slider = document.getElementById('resultSlider');
-        
-        // 设置 before 图片（原图）
-        if (originalImageData) {
-            beforeImg.src = originalImageData;
-        }
-        
-        // 直接设置 after 图片（已经缓存，立即显示）
-        afterImg.style.opacity = '1';
-        afterImg.src = url;
-        
-        // 初始化滑块位置和 before 宽度
-        document.getElementById('resultBeforeWrap').style.width = '50%';
-        document.getElementById('resultHandle').style.left = '50%';
-        if (slider && beforeImg) {
-            setTimeout(function() {
+        // 图片加载完成，延迟 2.5 秒让图片完全渲染，然后显示结果页
+        setTimeout(function() {
+            document.getElementById('loadingCard').classList.remove('show');
+            document.getElementById('resultCard').classList.add('show');
+            
+            // 如果 App 在后台，发送本地通知
+            if (document.hidden && window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Notifier) {
+                Capacitor.Plugins.Notifier.sendNotification({
+                    title: '图生万物',
+                    body: '图片生成已完成，点击查看'
+                }).catch(function() {});
+            }
+            
+            var afterImg = document.getElementById('resultAfter');
+            var beforeImg = document.getElementById('resultBefore');
+            var slider = document.getElementById('resultSlider');
+            
+            // 先设置 before 图片（原图），确保原图正确显示
+            if (originalImageData) {
+                beforeImg.src = originalImageData;
+            }
+            
+            // 设置 after 图片（结果图，已经预加载缓存）
+            afterImg.style.opacity = '1';
+            afterImg.src = url;
+            
+            // 初始化滑块位置
+            document.getElementById('resultBeforeWrap').style.width = '50%';
+            document.getElementById('resultHandle').style.left = '50%';
+            
+            // 确保 before 图片宽度正确（用 slider 的宽度）
+            if (slider && beforeImg) {
+                // 立即设置一次
                 beforeImg.style.width = slider.offsetWidth + 'px';
-            }, 50);
-        }
-        initSlider();
-        
-        var elapsed = Math.round((Date.now()-generationStartTime)/1000);
-        showToast('生成完成，用时 ' + elapsed + ' 秒', 2500);
+                // 50ms 后再设置一次（确保布局完成）
+                setTimeout(function() {
+                    beforeImg.style.width = slider.offsetWidth + 'px';
+                }, 50);
+                // 200ms 后再设置一次（确保图片加载完成后布局正确）
+                setTimeout(function() {
+                    beforeImg.style.width = slider.offsetWidth + 'px';
+                }, 200);
+            }
+            initSlider();
+            
+            var elapsed = Math.round((Date.now()-generationStartTime)/1000);
+            showToast('生成完成，用时 ' + elapsed + ' 秒', 2500);
+        }, 2500);
     };
     preloadImg.onerror = function() {
-        // 图片加载失败，仍然显示结果页，让用户可以重试
-        document.getElementById('loadingCard').classList.remove('show');
-        document.getElementById('resultCard').classList.add('show');
-        var afterImg = document.getElementById('resultAfter');
-        afterImg.src = url;
-        showToast('图片加载较慢，请稍候', 2500);
-        var slider = document.getElementById('resultSlider');
-        var beforeImg = document.getElementById('resultBefore');
-        document.getElementById('resultBeforeWrap').style.width = '50%';
-        document.getElementById('resultHandle').style.left = '50%';
-        if (slider && beforeImg) {
-            setTimeout(function() {
-                beforeImg.style.width = slider.offsetWidth + 'px';
-            }, 50);
-        }
-        initSlider();
+        // 图片加载失败，仍然显示结果页
+        setTimeout(function() {
+            document.getElementById('loadingCard').classList.remove('show');
+            document.getElementById('resultCard').classList.add('show');
+            var afterImg = document.getElementById('resultAfter');
+            var beforeImg = document.getElementById('resultBefore');
+            afterImg.src = url;
+            if (originalImageData) beforeImg.src = originalImageData;
+            showToast('图片加载较慢，请稍候', 2500);
+            document.getElementById('resultBeforeWrap').style.width = '50%';
+            document.getElementById('resultHandle').style.left = '50%';
+            var slider = document.getElementById('resultSlider');
+            if (slider && beforeImg) {
+                setTimeout(function() { beforeImg.style.width = slider.offsetWidth + 'px'; }, 100);
+            }
+            initSlider();
+        }, 1000);
     };
     preloadImg.src = url;
 }
