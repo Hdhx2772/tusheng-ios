@@ -7,6 +7,7 @@ class MyViewController: CAPBridgeViewController {
         // 手动注册自定义插件
         bridge?.registerPluginInstance(PhotoSaver())
         bridge?.registerPluginInstance(Notifier())
-        print("✅ 自定义插件已注册: PhotoSaver, Notifier")
+        bridge?.registerPluginInstance(BackgroundAudio())
+        print("✅ 自定义插件已注册: PhotoSaver, Notifier, BackgroundAudio")
     }
 }

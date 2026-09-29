@@ -13,6 +13,8 @@
 		3762271A9FD5C239CD1162B7 /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A20D594F75F43E52D4E3C35 /* Notifier.swift */; };
 		F9F8A68BFB82F99D7CDCA92D /* PhotoSaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43E700EF3D732C560F0952F /* PhotoSaver.swift */; };
 		99A67B43EA3733788E5B0CC7 /* MyViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 281F88CF254D4AAB50AF38C7 /* MyViewController.swift */; };
+		A1B2C3D4E5F60718293A4B5C /* BackgroundAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F60718293A4B5C6D /* BackgroundAudio.swift */; };
+		C3D4E5F60718293A4B5C6D7E /* silence.wav in Resources */ = {isa = PBXBuildFile; fileRef = D4E5F60718293A4B5C6D7E8F /* silence.wav */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
@@ -28,6 +30,8 @@
 		6A20D594F75F43E52D4E3C35 /* Notifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifier.swift; sourceTree = "<group>"; };
 		C43E700EF3D732C560F0952F /* PhotoSaver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSaver.swift; sourceTree = "<group>"; };
 		281F88CF254D4AAB50AF38C7 /* MyViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyViewController.swift; sourceTree = "<group>"; };
+		B2C3D4E5F60718293A4B5C6D /* BackgroundAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundAudio.swift; sourceTree = "<group>"; };
+		D4E5F60718293A4B5C6D7E8F /* silence.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = silence.wav; sourceTree = "<group>"; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -75,6 +79,8 @@
 				6A20D594F75F43E52D4E3C35 /* Notifier.swift */,
 				C43E700EF3D732C560F0952F /* PhotoSaver.swift */,
 				281F88CF254D4AAB50AF38C7 /* MyViewController.swift */,
+				B2C3D4E5F60718293A4B5C6D /* BackgroundAudio.swift */,
+				D4E5F60718293A4B5C6D7E8F /* silence.wav */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
@@ -151,6 +157,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C3D4E5F60718293A4B5C6D7E /* silence.wav in Resources */,
 				504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */,
 				50B271D11FEDC1A000F3C39B /* public in Resources */,
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
@@ -170,6 +177,7 @@
 				3762271A9FD5C239CD1162B7 /* Notifier.swift in Sources */,
 				F9F8A68BFB82F99D7CDCA92D /* PhotoSaver.swift in Sources */,
 				99A67B43EA3733788E5B0CC7 /* MyViewController.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5C /* BackgroundAudio.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 			);

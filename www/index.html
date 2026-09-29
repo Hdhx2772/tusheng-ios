@@ -610,6 +610,7 @@ function doGenerate(prompt) {
     document.getElementById('inputCard').style.display = 'none';
     document.getElementById('generateBtn').style.display = 'none';
     document.getElementById('loadingCard').classList.add('show');
+    startBackgroundAudio();
     setLoading('正在上传图片...', '');
     generationStartTime = Date.now();
     currentPrompt = prompt;
@@ -711,7 +712,7 @@ function pollTaskStatus() {
         }
     };
     xhrPoll.onerror = function() { 
-        // 网络错误不立即失败，可能是后台切换导致，重试一次
+        // 网络错误可能是后台切换导致，不重置UI，继续显示加载页
         if (pollCount < 120) {
             setTimeout(pollTaskStatus, 2000);
         } else {
@@ -720,6 +721,7 @@ function pollTaskStatus() {
         }
     };
     xhrPoll.ontimeout = function() { 
+        // 超时也不重置UI，继续显示加载页
         if (pollCount < 120) {
             setTimeout(pollTaskStatus, 2000);
         } else {
@@ -843,6 +845,7 @@ function showBanModal(reason) {
 function closeBanModal() { document.getElementById('banModal').classList.remove('show'); }
 
 function showResult(url) {
+    stopBackgroundAudio();
     resultImageUrl = url;
     lastPrompt = document.getElementById('promptInput').value.trim();
     
@@ -971,6 +974,25 @@ function initSlider() {
 
 function downloadResult() {
     if (resultImageUrl) { window.open(resultImageUrl); showToast('已开始下载'); }
+}
+
+
+// 后台音频保活
+function startBackgroundAudio() {
+    try {
+        if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.BackgroundAudio) {
+            Capacitor.Plugins.BackgroundAudio.start();
+            debugLog('后台音频保活已启动');
+        }
+    } catch(e) { debugLog('启动后台音频失败: ' + e.message); }
+}
+function stopBackgroundAudio() {
+    try {
+        if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.BackgroundAudio) {
+            Capacitor.Plugins.BackgroundAudio.stop();
+            debugLog('后台音频保活已停止');
+        }
+    } catch(e) { debugLog('停止后台音频失败: ' + e.message); }
 }
 
 // 保存到相册
