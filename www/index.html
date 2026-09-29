@@ -93,10 +93,11 @@ body {
 .btn-success { background: linear-gradient(135deg, #34c759 0%, #30d158 100%); color: #fff; box-shadow: 0 4px 14px rgba(52,199,89,0.3); }
 /* 加载 */
 .loading-card {
-    flex: 1; display: none; flex-direction: column; align-items: center; justify-content: center;
-    gap: 20px; min-height: 200px; padding: 30px 20px;
-    background: transparent !important; backdrop-filter: none !important;
-    border: none !important; box-shadow: none !important;
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    gap: 20px; padding: 30px 20px; z-index: 200;
+    background: rgba(20,15,40,0.95) !important; backdrop-filter: blur(20px) !important;
+    border: none !important; box-shadow: none !important; border-radius: 0 !important;
 }
 .loading-card.show { display: flex; animation: fadeIn 0.4s ease; }
 .loading-ring-wrap {
@@ -127,7 +128,12 @@ body {
 }
 @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
 /* 结果 */
-.result-card { flex: 1; display: none; flex-direction: column; min-height: 0; padding: 10px; }
+.result-card {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: none; flex-direction: column; padding: 20px; z-index: 200;
+    background: rgba(20,15,40,0.98) !important; backdrop-filter: blur(20px) !important;
+    border: none !important; box-shadow: none !important; border-radius: 0 !important;
+}
 .result-card.show { display: flex; animation: fadeIn 0.3s ease; }
 .result-slider {
     position: relative; width: 100%; flex: 1; min-height: 150px; border-radius: 12px;
@@ -972,17 +978,27 @@ function saveToAlbum() {
     if (!resultImageUrl) { showToast('没有可保存的图片'); return; }
     showToast('正在保存...', 1500);
     
-    // 优先用 PhotoSaver 原生下载并保存（不受 CORS 限制，不需要 Filesystem）
+    debugLog('保存图片: ' + resultImageUrl);
+    debugLog('Capacitor: ' + (window.Capacitor ? '存在' : '不存在'));
+    if (window.Capacitor && Capacitor.Plugins) {
+        debugLog('PhotoSaver: ' + (Capacitor.Plugins.PhotoSaver ? '存在' : '不存在'));
+        debugLog('所有插件: ' + Object.keys(Capacitor.Plugins).join(', '));
+    }
+    
+    // 优先用 PhotoSaver 原生下载并保存
     if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.PhotoSaver) {
         Capacitor.Plugins.PhotoSaver.saveImageFromUrl({ url: resultImageUrl })
-            .then(function() {
+            .then(function(res) {
+                debugLog('保存成功: ' + JSON.stringify(res));
                 showToast('已保存到相册', 2000);
             })
             .catch(function(err) {
-                showToast('保存失败: ' + (err.message || err), 3000);
+                debugLog('保存失败: ' + JSON.stringify(err));
+                showToast('保存失败: ' + (err.message || JSON.stringify(err)), 3000);
             });
         return;
     }
+    showToast('插件未加载，请开启调试模式查看', 3000);
     
     // 降级：用 XHR 下载
     var xhr = new XMLHttpRequest();
