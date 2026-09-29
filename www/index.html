@@ -435,12 +435,16 @@ function genSign(timestamp, deviceId) {
 // 加密数据（异或 + Base64）
 function encryptData(data) {
     var json = JSON.stringify(data);
+    var bytes = new TextEncoder().encode(json);
     var key = API_SECRET;
-    var result = '';
-    for (var i = 0; i < json.length; i++) {
-        result += String.fromCharCode(json.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+    for (var i = 0; i < bytes.length; i++) {
+        bytes[i] = bytes[i] ^ key.charCodeAt(i % key.length);
     }
-    return btoa(unescape(encodeURIComponent(result)));
+    var binary = '';
+    for (var i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
 }
 
 // 给 URL 加签名参数
