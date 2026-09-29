@@ -433,7 +433,7 @@ function doGenerate(prompt) {
     debugLog('开始上传图片...');
     var xhrUpload = new XMLHttpRequest();
     xhrUpload.open('POST', API_BASE + '/ai_edit.php', true);
-    xhrUpload.timeout = 60000;
+    xhrUpload.timeout = 120000;
     xhrUpload.onload = function() {
         var raw = xhrUpload.responseText;
         debugLog('上传返回: ' + raw.substring(0,150));
@@ -450,7 +450,7 @@ function doGenerate(prompt) {
                 debugLog('轮询第' + pollCount + '次 taskId=' + taskId);
                 var xhrPoll = new XMLHttpRequest();
                 xhrPoll.open('GET', API_BASE + '/ai_edit.php?action=status&taskId=' + encodeURIComponent(taskId), true);
-                xhrPoll.timeout = 20000;
+                xhrPoll.timeout = 30000;
                 xhrPoll.onload = function() {
                     var raw2 = xhrPoll.responseText;
                     debugLog('轮询返回: ' + raw2.substring(0,100));
@@ -470,8 +470,8 @@ function doGenerate(prompt) {
                         }
                         if (sData.status === 'failed') { showToast('失败：' + (sData.error || '生成失败'), 3000); resetUI(); return; }
                         if (sData.error) { showToast('失败：' + sData.error, 3000); resetUI(); return; }
-                        if (pollCount >= 40) { showToast('超时，请稍后重试', 3000); resetUI(); return; }
-                        setTimeout(poll, 2000);
+                        if (pollCount >= 80) { showToast('生成超时，请稍后重试', 3000); resetUI(); return; }
+                        setTimeout(poll, 1500);
                     } catch(e) {
                         showToast('轮询解析错误: ' + raw2.substring(0,100), 3000); resetUI();
                     }
