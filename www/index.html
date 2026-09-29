@@ -20,11 +20,10 @@
 html, body { height: 100%; }
 body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
-    background: linear-gradient(180deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    background: #667eea;
     color: var(--text); height: 100vh; overflow: hidden;
     display: flex; flex-direction: column;
     padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
 }
 /* 导航栏 - 毛玻璃 */
 .nav-bar {
@@ -399,7 +398,6 @@ body {
         <div class="modal-body" id="modalPrompt" style="font-size:13px;max-height:60px;overflow-y:auto;"></div>
         <div class="modal-actions">
             <button class="btn btn-success" onclick="saveFromHistory()">保存</button>
-            <button class="btn btn-secondary" onclick="continueFromHistory()">继续创作</button>
             <button class="btn btn-danger" onclick="deleteFromHistory()">删除</button>
             <button class="btn btn-secondary" onclick="closeModal()">关闭</button>
         </div>
@@ -492,6 +490,9 @@ function showTabBar() {
         var tabBar = document.querySelector('.tab-bar');
         if (tabBar) tabBar.style.transform = 'translateX(-50%)';
         if (tabBar) tabBar.style.opacity = '1';
+        // 修复键盘收起后页面上移
+        window.scrollTo(0, 0);
+        document.body.scrollTop = 0;
     }, 100);
 }
 
