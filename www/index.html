@@ -610,22 +610,26 @@ function submitEdit() {
     var prompt = document.getElementById('promptInput').value.trim();
     if (!prompt) { showToast('请输入修改描述'); return; }
     var devCode = getDeviceCode();
+    debugLog('开始检查授权，设备码: ' + devCode, 'INFO');
     showToast('检查授权...', 1000);
     var xhrAuth = new XMLHttpRequest();
     xhrAuth.open('POST', API_BASE + '/api_ai_record.php', true);
     xhrAuth.timeout = 15000;
     xhrAuth.onload = function() {
+        debugLog('授权检查响应: ' + xhrAuth.status + ' ' + xhrAuth.responseText.substring(0,150), 'NETWORK');
         try {
             var authData = JSON.parse(xhrAuth.responseText);
-            if (authData.status === 'banned') { showBanModal(authData.reason); return; }
-            if (!authData.authorized) { showAuthModal(); return; }
+            if (authData.status === 'banned') { debugLog('🚫 设备已被封禁: ' + (authData.reason || '无原因'), 'WARN'); showBanModal(authData.reason); return; }
+            if (!authData.authorized) { debugLog('❌ 未授权，显示授权弹窗', 'WARN'); showAuthModal(); return; }
+            debugLog('✅ 授权通过，开始生成', 'SUCCESS');
             doGenerate(prompt);
         } catch(e) {
+            debugLog('❌ 授权解析错误: ' + e.message + ' raw=' + xhrAuth.responseText.substring(0,100), 'ERROR');
             showToast('授权解析错误: ' + xhrAuth.responseText.substring(0,100));
         }
     };
-    xhrAuth.onerror = function() { showToast('授权网络异常，请检查网络'); };
-    xhrAuth.ontimeout = function() { showToast('授权检查超时，请重试'); };
+    xhrAuth.onerror = function() { debugLog('❌ 授权网络异常', 'ERROR'); showToast('授权网络异常，请检查网络'); };
+    xhrAuth.ontimeout = function() { debugLog('❌ 授权检查超时 (15s)', 'ERROR'); showToast('授权检查超时，请重试'); };
     var fdAuth = new FormData();
     fdAuth.append('action', 'check_auth');
     fdAuth.append('device_id', devCode);
@@ -812,7 +816,7 @@ var debugLogs = [];
 var DEBUG_MAX_LINES = 500;
 
 function debugLog(msg, level) {
-    if (!DEBUG_MODE) return;
+    // 始终记录日志，调试框只在开启调试模式后显示
     level = level || 'INFO';
     var now = new Date();
     var time = now.getHours().toString().padStart(2,'0') + ':' + 
@@ -824,6 +828,7 @@ function debugLog(msg, level) {
     debugLogs.push(entry);
     if (debugLogs.length > DEBUG_MAX_LINES) debugLogs.shift();
     
+    if (!DEBUG_MODE) return; // 只在调试模式开启时显示到界面
     var dbg = document.getElementById('debugBox');
     if (!dbg) {
         createDebugBox();
@@ -1006,6 +1011,12 @@ document.addEventListener('click', function(e) {
 var titleClickCount = 0;
 var titleClickTimer = null;
 document.addEventListener('DOMContentLoaded', function() {
+    debugLog('=== App 启动 ===', 'LIFECYCLE');
+    debugLog('设备: ' + (navigator.userAgent || 'unknown').substring(0,100), 'LIFECYCLE');
+    debugLog('平台: ' + (window.Capacitor ? 'Capacitor原生' : '浏览器'), 'LIFECYCLE');
+    if (window.Capacitor && Capacitor.Plugins) {
+        debugLog('已加载插件: ' + Object.keys(Capacitor.Plugins).join(', '), 'LIFECYCLE');
+    }
     // 请求通知权限
     if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Notifier) {
         Capacitor.Plugins.Notifier.requestPermission().catch(function() {});
@@ -1416,6 +1427,11 @@ function disagreeDisclaimer() {
 }
 
 window.addEventListener('load', function() {
+    debugLog('window load 触发，页面完全加载', 'LIFECYCLE');
+    // 延迟检查授权，确保所有资源加载完成
+    setTimeout(function() {
+        debugLog('开始启动流程...', 'LIFECYCLE');
+    }, 100);
     document.getElementById('disclaimerModal').classList.add('show');
     checkServerConfig();
 });

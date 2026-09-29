@@ -32,10 +32,5 @@ class MyViewController: CAPBridgeViewController {
         bridge.registerPluginInstance(Notifier())
         bridge.registerPluginInstance(BackgroundAudio())
         print("✅ 自定义插件已注册: PhotoSaver, Notifier, BackgroundAudio")
-        
-        // 打印所有已注册的插件
-        if let plugins = bridge.plugins as? [String: Any] {
-            print("📋 已注册插件列表: \(plugins.keys.joined(separator: ", "))")
-        }
     }
 }
