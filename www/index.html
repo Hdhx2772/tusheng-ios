@@ -398,22 +398,25 @@ function submitEdit() {
     if (!prompt) { showToast('请输入修改描述'); return; }
     var devCode = getDeviceCode();
     showToast('检查授权...', 1000);
-    var fdAuth = new FormData();
-    fdAuth.append('action', 'check_auth');
-    fdAuth.append('device_id', devCode);
-    fetch(API_BASE + '/api_ai_record.php', { method: 'POST', body: fdAuth })
-    .then(function(r){ return r.text(); })
-    .then(function(t){
+    var xhrAuth = new XMLHttpRequest();
+    xhrAuth.open('POST', API_BASE + '/api_ai_record.php', true);
+    xhrAuth.timeout = 15000;
+    xhrAuth.onload = function() {
         try {
-            var authData = JSON.parse(t);
+            var authData = JSON.parse(xhrAuth.responseText);
             if (authData.status === 'banned') { showBanModal(authData.reason); return; }
             if (!authData.authorized) { showAuthModal(); return; }
             doGenerate(prompt);
         } catch(e) {
-            showToast('授权解析错误: ' + t.substring(0,100));
+            showToast('授权解析错误: ' + xhrAuth.responseText.substring(0,100));
         }
-    })
-    .catch(function(e){ showToast('授权网络异常: ' + e.message); });
+    };
+    xhrAuth.onerror = function() { showToast('授权网络异常，请检查网络'); };
+    xhrAuth.ontimeout = function() { showToast('授权检查超时，请重试'); };
+    var fdAuth = new FormData();
+    fdAuth.append('action', 'check_auth');
+    fdAuth.append('device_id', devCode);
+    xhrAuth.send(fdAuth);
 }
 
 function doGenerate(prompt) {
@@ -427,43 +430,61 @@ function doGenerate(prompt) {
     var fd = new FormData();
     fd.append('image', selectedFile);
     fd.append('prompt', prompt);
-    debugLog('开始上传图片...'); fetch(API_BASE + '/ai_edit.php', { method: 'POST', body: fd })
-    .then(function(r){ return r.text(); })
-    .then(function(raw) {
+    debugLog('开始上传图片...');
+    var xhrUpload = new XMLHttpRequest();
+    xhrUpload.open('POST', API_BASE + '/ai_edit.php', true);
+    xhrUpload.timeout = 60000;
+    xhrUpload.onload = function() {
+        var raw = xhrUpload.responseText;
         debugLog('上传返回: ' + raw.substring(0,150));
-        var data = JSON.parse(raw);
-        var taskId = data.taskId || data.task_id || '';
-        debugLog('解析后: taskId=' + (taskId || '未找到'));
-        if (data.error) throw new Error(data.error);
-        if (!taskId) throw new Error('未获取到任务ID，请重试');
-        setLoading('AI 正在处理...', '');
-        var pollCount = 0;
-        function poll() {
-            pollCount++;
-            debugLog('轮询第' + pollCount + '次 taskId=' + taskId);
-            fetch(API_BASE + '/ai_edit.php?action=status&taskId=' + encodeURIComponent(taskId))
-            .then(function(r){ return r.text(); })
-            .then(function(raw2) {
-                debugLog('轮询返回: ' + raw2.substring(0,100));
-                var sData = JSON.parse(raw2);
-                if (sData.status === 'completed') {
-                    var elapsed = Math.round((Date.now()-startTime)/1000);
-                    showToast('完成，用时 ' + elapsed + ' 秒', 2500);
-                    var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
-                    hist.unshift({ prompt: prompt, imagePath: sData.result_url });
-                    localStorage.setItem('edit_history', JSON.stringify(hist.slice(0,50)));
-                    showResult(sData.result_url);
-                    return;
-                }
-                if (sData.status === 'failed') throw new Error(sData.error || '生成失败');
-                if (pollCount >= 40) throw new Error('超时，请稍后重试');
-                setTimeout(poll, 2000);
-            })
-            .catch(function(err) { showToast('失败：' + err.message, 3000); resetUI(); });
+        try {
+            var data = JSON.parse(raw);
+            var taskId = data.taskId || data.task_id || '';
+            debugLog('解析后: taskId=' + (taskId || '未找到'));
+            if (data.error) { showToast('失败：' + data.error, 3000); resetUI(); return; }
+            if (!taskId) { showToast('失败：未获取到任务ID', 3000); resetUI(); return; }
+            setLoading('AI 正在处理...', '');
+            var pollCount = 0;
+            function poll() {
+                pollCount++;
+                debugLog('轮询第' + pollCount + '次 taskId=' + taskId);
+                var xhrPoll = new XMLHttpRequest();
+                xhrPoll.open('GET', API_BASE + '/ai_edit.php?action=status&taskId=' + encodeURIComponent(taskId), true);
+                xhrPoll.timeout = 20000;
+                xhrPoll.onload = function() {
+                    var raw2 = xhrPoll.responseText;
+                    debugLog('轮询返回: ' + raw2.substring(0,100));
+                    try {
+                        var sData = JSON.parse(raw2);
+                        if (sData.status === 'completed') {
+                            var elapsed = Math.round((Date.now()-startTime)/1000);
+                            showToast('完成，用时 ' + elapsed + ' 秒', 2500);
+                            var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
+                            hist.unshift({ prompt: prompt, imagePath: sData.result_url });
+                            localStorage.setItem('edit_history', JSON.stringify(hist.slice(0,50)));
+                            showResult(sData.result_url);
+                            return;
+                        }
+                        if (sData.status === 'failed') { showToast('失败：' + (sData.error || '生成失败'), 3000); resetUI(); return; }
+                        if (sData.error) { showToast('失败：' + sData.error, 3000); resetUI(); return; }
+                        if (pollCount >= 40) { showToast('超时，请稍后重试', 3000); resetUI(); return; }
+                        setTimeout(poll, 2000);
+                    } catch(e) {
+                        showToast('轮询解析错误: ' + raw2.substring(0,100), 3000); resetUI();
+                    }
+                };
+                xhrPoll.onerror = function() { showToast('轮询网络异常', 3000); resetUI(); };
+                xhrPoll.ontimeout = function() { showToast('轮询超时', 3000); resetUI(); };
+                xhrPoll.send();
+            }
+            poll();
+        } catch(e) {
+            showToast('上传解析错误: ' + raw.substring(0,100), 3000); resetUI();
         }
-        poll();
-    })
-    .catch(function(err) { showToast('失败：' + err.message, 3000); resetUI(); });
+    };
+    xhrUpload.onerror = function() { showToast('上传网络异常，请检查网络', 3000); resetUI(); };
+    xhrUpload.ontimeout = function() { showToast('上传超时，请重试', 3000); resetUI(); };
+    xhrUpload.send(fd);
 }
 
 function setLoading(t, s) {
