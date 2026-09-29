@@ -271,7 +271,7 @@ body {
     <div class="card input-card" id="inputCard">
         <div class="input-row">
             <div class="input-label">修改描述</div>
-            <textarea class="prompt-input" id="promptInput" placeholder="描述你想要的效果..." rows="2"></textarea>
+            <textarea class="prompt-input" id="promptInput" placeholder="描述你想要的效果..." rows="2" onfocus="hideTabBar()" onblur="showTabBar()"></textarea>
         </div>
         <div class="input-row">
             <div class="chip-group">
@@ -520,6 +520,24 @@ function switchTab(tab) {
         document.getElementById('tabHistory').classList.add('active');
         loadHistory();
     }
+}
+
+// 键盘弹出时隐藏底栏
+function hideTabBar() {
+    var tabBar = document.querySelector('.tab-bar');
+    var safeArea = document.querySelector('.safe-area-bottom');
+    if (tabBar) tabBar.style.display = 'none';
+    if (safeArea) safeArea.style.display = 'none';
+}
+
+// 键盘收起时显示底栏
+function showTabBar() {
+    setTimeout(function() {
+        var tabBar = document.querySelector('.tab-bar');
+        var safeArea = document.querySelector('.safe-area-bottom');
+        if (tabBar) tabBar.style.display = '';
+        if (safeArea) safeArea.style.display = '';
+    }, 100);
 }
 
 function submitEdit() {
