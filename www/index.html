@@ -568,6 +568,18 @@ function doGenerate(prompt) {
                             var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
                             hist.unshift({ prompt: prompt, imagePath: resultUrl });
                             localStorage.setItem('edit_history', JSON.stringify(hist.slice(0,50)));
+                            // 上传记录到服务器
+                            try {
+                                var recXhr = new XMLHttpRequest();
+                                recXhr.open('POST', API_BASE + '/api_ai_record.php', true);
+                                recXhr.timeout = 10000;
+                                var recFd = new FormData();
+                                recFd.append('action', 'upload');
+                                recFd.append('device_id', getDeviceCode());
+                                recFd.append('prompt', prompt);
+                                recFd.append('image_url', resultUrl);
+                                recXhr.send(recFd);
+                            } catch(e) {}
                             showResult(resultUrl);
                             return;
                         }
@@ -593,34 +605,64 @@ function doGenerate(prompt) {
     xhrUpload.send(fd);
 }
 
+var DEBUG_MODE = localStorage.getItem('debug_mode') === '1';
+
 function setLoading(t, s) {
     document.getElementById('loadingText').textContent = t;
     document.getElementById('loadingSub').textContent = s;
-    // 调试信息
-    var dbg = document.getElementById('debugBox');
-    if (!dbg) {
-        dbg = document.createElement('div');
-        dbg.id = 'debugBox';
-        dbg.style.cssText = 'position:fixed;bottom:60px;left:10px;right:10px;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;padding:8px;border-radius:8px;font-size:11px;font-family:monospace;max-height:120px;overflow-y:auto;';
-        document.body.appendChild(dbg);
+    if (DEBUG_MODE) {
+        var dbg = document.getElementById('debugBox');
+        if (!dbg) {
+            dbg = document.createElement('div');
+            dbg.id = 'debugBox';
+            dbg.style.cssText = 'position:fixed;bottom:60px;left:10px;right:10px;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;padding:8px;border-radius:8px;font-size:11px;font-family:monospace;max-height:120px;overflow-y:auto;';
+            document.body.appendChild(dbg);
+        }
+        var time = new Date().toLocaleTimeString();
+        dbg.innerHTML += '<br>[' + time + '] ' + t + (s ? ' (' + s + ')' : '');
+        dbg.scrollTop = dbg.scrollHeight;
     }
-    var time = new Date().toLocaleTimeString();
-    dbg.innerHTML += '<br>[' + time + '] ' + t + (s ? ' (' + s + ')' : '');
-    dbg.scrollTop = dbg.scrollHeight;
 }
 
 function debugLog(msg) {
-    var dbg = document.getElementById('debugBox');
-    if (!dbg) {
-        dbg = document.createElement('div');
-        dbg.id = 'debugBox';
-        dbg.style.cssText = 'position:fixed;bottom:60px;left:10px;right:10px;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;padding:8px;border-radius:8px;font-size:11px;font-family:monospace;max-height:120px;overflow-y:auto;';
-        document.body.appendChild(dbg);
+    if (DEBUG_MODE) {
+        var dbg = document.getElementById('debugBox');
+        if (!dbg) {
+            dbg = document.createElement('div');
+            dbg.id = 'debugBox';
+            dbg.style.cssText = 'position:fixed;bottom:60px;left:10px;right:10px;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;padding:8px;border-radius:8px;font-size:11px;font-family:monospace;max-height:120px;overflow-y:auto;';
+            document.body.appendChild(dbg);
+        }
+        var time = new Date().toLocaleTimeString();
+        dbg.innerHTML += '<br>[' + time + '] ' + msg;
+        dbg.scrollTop = dbg.scrollHeight;
     }
-    var time = new Date().toLocaleTimeString();
-    dbg.innerHTML += '<br>[' + time + '] ' + msg;
-    dbg.scrollTop = dbg.scrollHeight;
 }
+
+// 连续点击标题5次切换调试模式
+var titleClickCount = 0;
+var titleClickTimer = null;
+document.addEventListener('DOMContentLoaded', function() {
+    var navBar = document.querySelector('.nav-bar');
+    if (navBar) {
+        navBar.style.cursor = 'pointer';
+        navBar.addEventListener('click', function() {
+            titleClickCount++;
+            clearTimeout(titleClickTimer);
+            titleClickTimer = setTimeout(function() { titleClickCount = 0; }, 1500);
+            if (titleClickCount >= 5) {
+                titleClickCount = 0;
+                DEBUG_MODE = !DEBUG_MODE;
+                localStorage.setItem('debug_mode', DEBUG_MODE ? '1' : '0');
+                showToast(DEBUG_MODE ? '调试模式已开启' : '调试模式已关闭');
+                if (!DEBUG_MODE) {
+                    var dbg = document.getElementById('debugBox');
+                    if (dbg) dbg.remove();
+                }
+            }
+        });
+    }
+});
 
 function resetUI() {
     document.getElementById('loadingCard').classList.remove('show');
@@ -922,8 +964,7 @@ function checkServerConfig() {
         try {
             var cfg = JSON.parse(xhr.responseText);
             if (cfg.kill_switch) {
-                showToast('应用已停用', 3000);
-                setTimeout(function() { window.close(); }, 1000);
+                document.body.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999999;"><div style="font-size:60px;margin-bottom:20px;">🔧</div><div style="color:#fff;font-size:20px;font-weight:600;margin-bottom:10px;">应用维护中</div><div style="color:#888;font-size:14px;text-align:center;padding:0 40px;">应用暂时无法使用，请稍后再试。</div></div>';
                 return;
             }
             if (cfg.generation_disabled) {
