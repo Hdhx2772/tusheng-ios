@@ -1123,6 +1123,13 @@ function showResult(url) {
         initSlider();
     };
     afterImg.src = url;
+    var preloadImg = new Image();
+    preloadImg.onload = function() {
+        // 图片加载完成，显示结果页
+        document.getElementById('loadingCard').classList.remove('show');
+        document.getElementById('resultCard').classList.add('show');
+        initSlider();
+    };
     preloadImg.onerror = function() {
         // 图片加载失败，仍然显示结果页
         setTimeout(function() {
