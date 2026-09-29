@@ -150,7 +150,7 @@ body {
 .tab-bar {
     background: rgba(0,0,0,0.55); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
     border-top: 0.5px solid rgba(255,255,255,0.15); display: flex; flex-shrink: 0;
-    padding: 8px 0 calc(8px + env(safe-area-inset-bottom)); z-index: 100;
+    padding: 10px 0 8px; z-index: 100;
     box-shadow: 0 -4px 24px rgba(0,0,0,0.25);
 }
 .tab-item {
@@ -167,6 +167,11 @@ body {
 .tab-item svg { width: 22px; height: 22px; stroke-width: 2.5; }
 .tab-item.active svg { stroke-width: 2.8; }
 .tab-item span { font-size: 10px; font-weight: 600; letter-spacing: 0.2px; }
+.safe-area-bottom {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: env(safe-area-inset-bottom);
+    background: rgba(0,0,0,0.55); z-index: 99;
+}
 /* 弹窗 */
 .modal-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -302,6 +307,9 @@ body {
         <span>历史</span>
     </div>
 </div>
+
+<!-- 安全区域背景覆盖 -->
+<div class="safe-area-bottom"></div>
 
 <!-- 免责声明 -->
 <div class="modal-overlay modal-center" id="disclaimerModal">
