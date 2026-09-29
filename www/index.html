@@ -490,9 +490,12 @@ function fixImageOrientation(file, callback) {
                 case 8: ctx.transform(0, -1, 1, 0, 0, w); break;
             }
             ctx.drawImage(img, 0, 0);
+            // PNG保持原格式，避免透明背景变黑
+            var mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+            var quality = mimeType === 'image/jpeg' ? 0.92 : undefined;
             canvas.toBlob(function(blob) {
                 callback(blob);
-            }, 'image/jpeg', 0.92);
+            }, mimeType, quality);
         };
         img.src = URL.createObjectURL(file);
     });
@@ -765,32 +768,34 @@ function showResult(url) {
     
     var afterImg = document.getElementById('resultAfter');
     var beforeImg = document.getElementById('resultBefore');
+    var slider = document.getElementById('resultSlider');
     
     // 设置 before 图片（原图）
     if (originalImageData) {
         beforeImg.src = originalImageData;
     }
     
-    // 设置 after 图片（结果），加加载状态
-    afterImg.style.opacity = '0.3';
+    // 直接设置 after 图片，不用 opacity 过渡
+    afterImg.style.opacity = '1';
     afterImg.onload = function() {
-        this.style.opacity = '1';
         // 图片加载完成后设置 before 宽度
-        setTimeout(function() {
-            var slider = document.getElementById('resultSlider');
-            if (slider && beforeImg) {
-                beforeImg.style.width = slider.offsetWidth + 'px';
-            }
-        }, 50);
+        if (slider && beforeImg) {
+            beforeImg.style.width = slider.offsetWidth + 'px';
+        }
     };
     afterImg.onerror = function() {
-        this.style.opacity = '1';
         showToast('图片加载失败，请重试', 3000);
     };
     afterImg.src = url;
     
+    // 初始化滑块位置和 before 宽度
     document.getElementById('resultBeforeWrap').style.width = '50%';
     document.getElementById('resultHandle').style.left = '50%';
+    if (slider && beforeImg) {
+        setTimeout(function() {
+            beforeImg.style.width = slider.offsetWidth + 'px';
+        }, 100);
+    }
     initSlider();
 }
 
