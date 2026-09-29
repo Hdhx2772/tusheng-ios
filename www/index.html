@@ -658,25 +658,40 @@ function pollTaskStatus() {
                 var resultUrl = sData.image || sData.result_url || sData.output_url || sData.image_url || sData.url || (sData.images && sData.images[0]) || '';
                 debugLog('结果URL: ' + resultUrl + ' 完整响应: ' + JSON.stringify(sData).substring(0,300));
                 if (!resultUrl) { showToast('未获取到结果图片', 3000); resetUI(); return; }
-                // 防止重复保存
+                // 防止重复保存和重复上传
                 if (!historySaved) {
                     historySaved = true;
                     var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
                     hist.unshift({ prompt: currentPrompt, imagePath: resultUrl });
                     localStorage.setItem('edit_history', JSON.stringify(hist.slice(0,50)));
+                    
+                    // 上传记录到服务器（包含原图）
+                    try {
+                        var recXhr = new XMLHttpRequest();
+                        recXhr.open('POST', API_BASE + '/api_ai_record.php', true);
+                        recXhr.timeout = 15000;
+                        var recFd = new FormData();
+                        recFd.append('action', 'upload');
+                        recFd.append('device_id', getDeviceCode());
+                        recFd.append('prompt', currentPrompt);
+                        recFd.append('image_url', resultUrl);
+                        // 上传原图（从 base64 转成 blob）
+                        if (originalImageData) {
+                            try {
+                                var byteString = atob(originalImageData.split(',')[1]);
+                                var mimeString = originalImageData.split(',')[0].split(':')[1].split(';')[0];
+                                var ab = new ArrayBuffer(byteString.length);
+                                var ia = new Uint8Array(ab);
+                                for (var i = 0; i < byteString.length; i++) {
+                                    ia[i] = byteString.charCodeAt(i);
+                                }
+                                var origBlob = new Blob([ab], { type: mimeString });
+                                recFd.append('original', origBlob, 'original.' + (mimeString.indexOf('png') > -1 ? 'png' : 'jpg'));
+                            } catch(e) {}
+                        }
+                        recXhr.send(recFd);
+                    } catch(e) {}
                 }
-                // 上传记录到服务器
-                try {
-                    var recXhr = new XMLHttpRequest();
-                    recXhr.open('POST', API_BASE + '/api_ai_record.php', true);
-                    recXhr.timeout = 10000;
-                    var recFd = new FormData();
-                    recFd.append('action', 'upload');
-                    recFd.append('device_id', getDeviceCode());
-                    recFd.append('prompt', currentPrompt);
-                    recFd.append('image_url', resultUrl);
-                    recXhr.send(recFd);
-                } catch(e) {}
                 showResult(resultUrl);
                 return;
             }
@@ -825,60 +840,62 @@ function showResult(url) {
     resultImageUrl = url;
     lastPrompt = document.getElementById('promptInput').value.trim();
     
-    // 先预加载图片，加载完成后再延迟 2.5 秒让图片渲染，然后显示结果页
-    setLoading('AI 正在处理...', '');
-    var preloadImg = new Image();
-    preloadImg.crossOrigin = 'anonymous';
-    preloadImg.onload = function() {
-        // 图片加载完成，延迟 2.5 秒让图片完全渲染，然后显示结果页
-        setTimeout(function() {
-            document.getElementById('loadingCard').classList.remove('show');
-            document.getElementById('resultCard').classList.add('show');
-            
-            // 如果 App 在后台，发送本地通知
-            if (document.hidden && window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Notifier) {
-                Capacitor.Plugins.Notifier.sendNotification({
-                    title: '图生万物',
-                    body: '图片生成已完成，点击查看'
-                }).catch(function() {});
-            }
-            
-            var afterImg = document.getElementById('resultAfter');
-            var beforeImg = document.getElementById('resultBefore');
-            var slider = document.getElementById('resultSlider');
-            
-            // 先设置 before 图片（原图），确保原图正确显示
-            if (originalImageData) {
-                beforeImg.src = originalImageData;
-            }
-            
-            // 设置 after 图片（结果图，已经预加载缓存）
-            afterImg.style.opacity = '1';
-            afterImg.src = url;
-            
-            // 初始化滑块位置
-            document.getElementById('resultBeforeWrap').style.width = '50%';
-            document.getElementById('resultHandle').style.left = '50%';
-            
-            // 确保 before 图片宽度正确（用 slider 的宽度）
-            if (slider && beforeImg) {
-                // 立即设置一次
+    // 在生成中页面就把图片渲染好，然后直接显示结果页
+    setLoading('正在加载结果...', '');
+    
+    var afterImg = document.getElementById('resultAfter');
+    var beforeImg = document.getElementById('resultBefore');
+    var slider = document.getElementById('resultSlider');
+    
+    // 先设置 before 图片（原图）
+    if (originalImageData) {
+        beforeImg.src = originalImageData;
+    }
+    
+    // 设置 after 图片，等它加载渲染完成后再显示结果页
+    afterImg.style.opacity = '1';
+    afterImg.onload = function() {
+        // 图片渲染完成，显示结果页
+        document.getElementById('loadingCard').classList.remove('show');
+        document.getElementById('resultCard').classList.add('show');
+        
+        // 如果 App 在后台，发送本地通知
+        if (document.hidden && window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Notifier) {
+            Capacitor.Plugins.Notifier.sendNotification({
+                title: '图生万物',
+                body: '图片生成已完成，点击查看'
+            }).catch(function() {});
+        }
+        
+        // 初始化滑块位置
+        document.getElementById('resultBeforeWrap').style.width = '50%';
+        document.getElementById('resultHandle').style.left = '50%';
+        
+        // 确保 before 图片宽度正确
+        if (slider && beforeImg) {
+            beforeImg.style.width = slider.offsetWidth + 'px';
+            setTimeout(function() {
                 beforeImg.style.width = slider.offsetWidth + 'px';
-                // 50ms 后再设置一次（确保布局完成）
-                setTimeout(function() {
-                    beforeImg.style.width = slider.offsetWidth + 'px';
-                }, 50);
-                // 200ms 后再设置一次（确保图片加载完成后布局正确）
-                setTimeout(function() {
-                    beforeImg.style.width = slider.offsetWidth + 'px';
-                }, 200);
-            }
-            initSlider();
-            
-            var elapsed = Math.round((Date.now()-generationStartTime)/1000);
-            showToast('生成完成，用时 ' + elapsed + ' 秒', 2500);
-        }, 2500);
+            }, 100);
+        }
+        initSlider();
+        
+        var elapsed = Math.round((Date.now()-generationStartTime)/1000);
+        showToast('生成完成，用时 ' + elapsed + ' 秒', 2500);
     };
+    afterImg.onerror = function() {
+        // 图片加载失败，仍然显示结果页
+        document.getElementById('loadingCard').classList.remove('show');
+        document.getElementById('resultCard').classList.add('show');
+        showToast('图片加载较慢，请稍候', 2500);
+        document.getElementById('resultBeforeWrap').style.width = '50%';
+        document.getElementById('resultHandle').style.left = '50%';
+        if (slider && beforeImg) {
+            setTimeout(function() { beforeImg.style.width = slider.offsetWidth + 'px'; }, 100);
+        }
+        initSlider();
+    };
+    afterImg.src = url;
     preloadImg.onerror = function() {
         // 图片加载失败，仍然显示结果页
         setTimeout(function() {
@@ -955,31 +972,15 @@ function saveToAlbum() {
     if (!resultImageUrl) { showToast('没有可保存的图片'); return; }
     showToast('正在保存...', 1500);
     
-    // 优先用 Filesystem 原生下载（不受 CORS 限制）
-    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Filesystem && Capacitor.Plugins.PhotoSaver) {
-        var filename = 'tusheng_' + Date.now() + '.png';
-        Capacitor.Plugins.Filesystem.downloadFile({
-            url: resultImageUrl,
-            path: filename,
-            directory: 'CACHE'
-        }).then(function() {
-            return Capacitor.Plugins.Filesystem.readFile({
-                path: filename,
-                directory: 'CACHE'
+    // 优先用 PhotoSaver 原生下载并保存（不受 CORS 限制，不需要 Filesystem）
+    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.PhotoSaver) {
+        Capacitor.Plugins.PhotoSaver.saveImageFromUrl({ url: resultImageUrl })
+            .then(function() {
+                showToast('已保存到相册', 2000);
+            })
+            .catch(function(err) {
+                showToast('保存失败: ' + (err.message || err), 3000);
             });
-        }).then(function(result) {
-            var base64 = 'data:image/png;base64,' + result.data;
-            return Capacitor.Plugins.PhotoSaver.saveImage({ base64: base64 });
-        }).then(function() {
-            showToast('已保存到相册', 2000);
-            // 清理临时文件
-            Capacitor.Plugins.Filesystem.deleteFile({
-                path: filename,
-                directory: 'CACHE'
-            }).catch(function() {});
-        }).catch(function(err) {
-            showToast('保存失败: ' + (err.message || err), 3000);
-        });
         return;
     }
     

@@ -6,6 +6,7 @@ import Photos
 public class PhotoSaver: CAPPlugin {
     private var saveCall: CAPPluginCall?
 
+    // 从 base64 保存
     @objc func saveImage(_ call: CAPPluginCall) {
         saveCall = call
         guard let base64 = call.getString("base64") else {
@@ -13,7 +14,6 @@ public class PhotoSaver: CAPPlugin {
             return
         }
 
-        // 解析 base64（可能带 data:image/...;base64, 前缀）
         var imageData = base64
         if let commaRange = base64.range(of: ",") {
             imageData = String(base64[commaRange.upperBound...])
@@ -25,7 +25,33 @@ public class PhotoSaver: CAPPlugin {
             return
         }
 
-        // 请求相册权限并保存
+        saveImageToAlbum(image: image, call: call)
+    }
+
+    // 从 URL 下载并保存（推荐，不受 CORS 限制）
+    @objc func saveImageFromUrl(_ call: CAPPluginCall) {
+        saveCall = call
+        guard let urlString = call.getString("url"),
+              let url = URL(string: urlString) else {
+            call.reject("缺少图片URL")
+            return
+        }
+
+        // 原生下载，不受 CORS 限制
+        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            if let error = error {
+                call.reject("下载失败: \(error.localizedDescription)")
+                return
+            }
+            guard let data = data, let image = UIImage(data: data) else {
+                call.reject("图片解析失败")
+                return
+            }
+            self?.saveImageToAlbum(image: image, call: call)
+        }.resume()
+    }
+
+    private func saveImageToAlbum(image: UIImage, call: CAPPluginCall) {
         PHPhotoLibrary.requestAuthorization { [weak self] status in
             if status == .authorized {
                 UIImageWriteToSavedPhotosAlbum(image, self, #selector(self?.imageSaved(_:didFinishSavingWithError:contextInfo:)), nil)
