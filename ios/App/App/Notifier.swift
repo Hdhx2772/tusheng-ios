@@ -3,8 +3,14 @@ import Capacitor
 import UserNotifications
 
 @objc(Notifier)
-public class Notifier: CAPPlugin {
+public class Notifier: CAPPlugin, UNUserNotificationCenterDelegate {
     private var notificationCall: CAPPluginCall?
+
+    override public func load() {
+        super.load()
+        // 设置通知中心 delegate，让 App 在前台时也能显示通知
+        UNUserNotificationCenter.current().delegate = self
+    }
 
     // 请求通知权限
     @objc func requestPermission(_ call: CAPPluginCall) {
@@ -27,7 +33,7 @@ public class Notifier: CAPPlugin {
         content.body = body
         content.sound = .default
 
-        // 立即发送（0秒后触发）
+        // 立即发送（0.1秒后触发）
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
 
@@ -38,5 +44,19 @@ public class Notifier: CAPPlugin {
                 call.resolve(["success": true])
             }
         }
+    }
+
+    // App 在前台时也显示通知
+    public func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                       willPresent notification: UNNotification,
+                                       withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.alert, .sound, .badge])
+    }
+
+    // 点击通知时打开 App
+    public func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                       didReceive response: UNNotificationResponse,
+                                       withCompletionHandler completionHandler: @escaping () -> Void) {
+        completionHandler()
     }
 }

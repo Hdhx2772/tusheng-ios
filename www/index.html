@@ -955,45 +955,63 @@ function saveToAlbum() {
     if (!resultImageUrl) { showToast('没有可保存的图片'); return; }
     showToast('正在保存...', 1500);
     
-    // 用 XHR 下载图片转 base64
+    // 优先用 Filesystem 原生下载（不受 CORS 限制）
+    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Filesystem && Capacitor.Plugins.PhotoSaver) {
+        var filename = 'tusheng_' + Date.now() + '.png';
+        Capacitor.Plugins.Filesystem.downloadFile({
+            url: resultImageUrl,
+            path: filename,
+            directory: 'CACHE'
+        }).then(function() {
+            return Capacitor.Plugins.Filesystem.readFile({
+                path: filename,
+                directory: 'CACHE'
+            });
+        }).then(function(result) {
+            var base64 = 'data:image/png;base64,' + result.data;
+            return Capacitor.Plugins.PhotoSaver.saveImage({ base64: base64 });
+        }).then(function() {
+            showToast('已保存到相册', 2000);
+            // 清理临时文件
+            Capacitor.Plugins.Filesystem.deleteFile({
+                path: filename,
+                directory: 'CACHE'
+            }).catch(function() {});
+        }).catch(function(err) {
+            showToast('保存失败: ' + (err.message || err), 3000);
+        });
+        return;
+    }
+    
+    // 降级：用 XHR 下载
     var xhr = new XMLHttpRequest();
     xhr.open('GET', resultImageUrl, true);
     xhr.responseType = 'blob';
     xhr.timeout = 30000;
     xhr.onload = function() {
-        if (xhr.status !== 200) {
-            showToast('下载失败，请重试', 2000);
-            return;
-        }
+        if (xhr.status !== 200) { fallbackSave(); return; }
         var blob = xhr.response;
         var reader = new FileReader();
         reader.onloadend = function() {
             var base64 = reader.result;
-            // 调用原生插件保存到相册
             if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.PhotoSaver) {
                 Capacitor.Plugins.PhotoSaver.saveImage({ base64: base64 })
-                    .then(function() {
-                        showToast('已保存到相册', 2000);
-                    })
-                    .catch(function(err) {
-                        showToast('保存失败: ' + (err.message || err), 3000);
-                    });
+                    .then(function() { showToast('已保存到相册', 2000); })
+                    .catch(function(err) { showToast('保存失败: ' + (err.message || err), 3000); });
             } else {
-                // 降级：用 a 标签下载
-                var a = document.createElement('a');
-                a.href = base64;
-                a.download = '图生万物_' + Date.now() + '.png';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                showToast('已开始下载', 2000);
+                fallbackSave();
             }
         };
         reader.readAsDataURL(blob);
     };
-    xhr.onerror = function() { showToast('网络异常，请重试', 2000); };
-    xhr.ontimeout = function() { showToast('下载超时，请重试', 2000); };
+    xhr.onerror = function() { fallbackSave(); };
+    xhr.ontimeout = function() { fallbackSave(); };
     xhr.send();
+    
+    function fallbackSave() {
+        window.open(resultImageUrl);
+        showToast('长按图片保存', 2000);
+    }
 }
 
 // 继续创作（保留图片和提示词）
