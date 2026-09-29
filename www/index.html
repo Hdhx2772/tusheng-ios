@@ -170,10 +170,6 @@ body::after {
 .toast.show { display: block; animation: toastIn 0.25s ease; }
 @keyframes toastIn { from { opacity: 0; transform: translate(-50%,-40%); } to { opacity: 1; transform: translate(-50%,-50%); } }
 </style>
-<script src="https://unpkg.com/@capacitor/core@latest/dist/capacitor.js"></script>
-<script src="https://unpkg.com/@capacitor/clipboard@latest/dist/plugin.js"></script>
-<script src="https://unpkg.com/@capacitor/filesystem@latest/dist/plugin.js"></script>
-<script src="https://unpkg.com/@capacitor/device@latest/dist/plugin.js"></script>
 </head>
 <body>
 <div class="bg-blob"></div>
@@ -396,7 +392,7 @@ function removeImage() {
     selectedFile = null;
     fileInput.value = '';
     document.getElementById('previewCard').classList.remove('show');
-    document.getElementById('uploadCard').style.display = 'block';
+    document.getElementById('uploadCard').style.display = 'flex';
 }
 function setPreset(text) { document.getElementById('promptInput').value = text; updateCount(); }
 function updateCount() {
@@ -490,7 +486,7 @@ function resetUI() {
     document.getElementById('inputCard').style.display = 'flex';
     document.getElementById('generateBtn').style.display = 'block';
     if (selectedFile) document.getElementById('previewCard').classList.add('show');
-    else document.getElementById('uploadCard').style.display = 'block';
+    else document.getElementById('uploadCard').style.display = 'flex';
 }
 function showAuthModal() {
     let devCode = localStorage.getItem('dev_code');
@@ -529,11 +525,7 @@ function showUpdateModal(currentVersion, latestVersion, downloadUrl) {
     document.getElementById('updateModal').classList.add('show');
 }
 function downloadUpdate() {
-    if (window.AndroidBridge && window.AndroidBridge.openUrl) {
-        window.open(updateDownloadUrl, '_blank');
-    } else {
-        window.location.href = updateDownloadUrl;
-    }
+    window.open(updateDownloadUrl, '_blank');
 }
 
 // 公告
@@ -617,7 +609,7 @@ function resetAll() {
     document.getElementById('resultCard').classList.remove('show');
     document.getElementById('inputCard').style.display = 'flex';
     document.getElementById('generateBtn').style.display = 'block';
-    document.getElementById('uploadCard').style.display = 'block';
+    document.getElementById('uploadCard').style.display = 'flex';
 }
 function loadHistory() {
     const history = JSON.parse(localStorage.getItem('edit_history') || '[]');
@@ -626,7 +618,7 @@ function loadHistory() {
     grid.innerHTML = '';
     if (history.length === 0) { empty.style.display = 'block'; return; }
     empty.style.display = 'none';
-    const toUrl = (p) => p ? (p.startsWith('file://') || p.startsWith('data:') ? p : 'file://' + p) : '';
+    const toUrl = (p) => p;
     history.forEach((item, index) => {
         const div = document.createElement('div');
         div.className = 'history-item';
@@ -640,7 +632,7 @@ function openHistory(index) {
     if (!history[index]) return;
     currentHistoryIndex = index;
     const p = history[index].imagePath || history[index].resultPath;
-    document.getElementById('modalImg').src = p ? (p.startsWith('file://') || p.startsWith('data:') ? p : 'file://' + p) : '';
+    document.getElementById('modalImg').src = p || '';
     document.getElementById('modalPrompt').textContent = history[index].prompt || '无描述';
     document.getElementById('modalOverlay').classList.add('show');
 }
@@ -691,9 +683,8 @@ function agreeDisclaimer() {
     document.getElementById('disclaimerModal').classList.remove('show');
 }
 function disagreeDisclaimer() {
-    window.close();
-    } else {
-        showToast('您必须同意协议才能使用本应用');
+    if (confirm('您确定要退出吗？')) {
+        window.close();
     }
 }
 window.addEventListener('load', function() {
