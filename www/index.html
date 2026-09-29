@@ -432,13 +432,14 @@ function doGenerate(prompt) {
     .then(function(raw) {
         debugLog('上传返回: ' + raw.substring(0,150));
         var data = JSON.parse(raw);
+        debugLog('解析后: taskId=' + (data.taskId || data.task_id || '未找到'));
         if (data.error) throw new Error(data.error);
         setLoading('AI 正在处理...', '');
         var pollCount = 0;
         function poll() {
             pollCount++;
             debugLog('轮询第' + pollCount + '次...');
-            fetch(API_BASE + '/ai_edit.php?action=status&taskId=' + data.task_id)
+            fetch(API_BASE + '/ai_edit.php?action=status&taskId=' + data.taskId)
             .then(function(r){ return r.text(); })
             .then(function(raw2) {
                 debugLog('轮询返回: ' + raw2.substring(0,100));
