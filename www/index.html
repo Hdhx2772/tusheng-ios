@@ -55,10 +55,10 @@ body {
 .upload-title { font-size: 17px; font-weight: 600; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 .upload-hint { font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 5px; }
 /* 预览 */
-.preview-card { flex: 1; display: none; flex-direction: column; min-height: 0; padding: 10px; }
+.preview-card { flex: 1; display: none; flex-direction: column; min-height: 0; padding: 10px; overflow: hidden; }
 .preview-card.show { display: flex; animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.preview-img { width: 100%; flex: 1; min-height: 0; object-fit: contain; border-radius: 12px; background: #f5f5f7; }
+.preview-img { width: 100%; max-height: 100%; height: auto; flex: 1; min-height: 0; object-fit: contain; border-radius: 12px; background: rgba(255,255,255,0.1); }
 .preview-actions { display: flex; gap: 8px; margin-top: 8px; }
 /* 输入区 */
 .input-card { padding: 0; overflow: hidden; }
@@ -96,6 +96,8 @@ body {
 .loading-card {
     flex: 1; display: none; flex-direction: column; align-items: center; justify-content: center;
     gap: 20px; min-height: 200px; padding: 30px 20px;
+    background: transparent !important; backdrop-filter: none !important;
+    border: none !important; box-shadow: none !important;
 }
 .loading-card.show { display: flex; animation: fadeIn 0.4s ease; }
 .loading-ring-wrap {
@@ -562,7 +564,7 @@ function doGenerate(prompt) {
     var devCode = getDeviceCode();
     var ts = Math.floor(Date.now() / 1000);
     var sign = genSign(ts, devCode);
-    var encData = encryptData({prompt: prompt});
+    var encData = encryptData({prompt: prompt, device_id: devCode});
     var fd = new FormData();
     fd.append('image', selectedFile);
     fd.append('ts', ts);
