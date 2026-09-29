@@ -580,6 +580,33 @@ window.addEventListener('load', function() {
     document.getElementById('disclaimerModal').classList.add('show');
 });
 </script>
+
+<script>
+window.addEventListener('load', function() {
+    setTimeout(function() {
+        var testDiv = document.createElement('div');
+        testDiv.style.cssText = 'position:fixed;top:50px;left:10px;right:10px;z-index:99999;background:rgba(0,0,0,0.9);color:#0f0;padding:10px;border-radius:8px;font-size:12px;';
+        testDiv.id = 'netTest';
+        testDiv.innerHTML = '=== 网络测试 ===';
+        document.body.appendChild(testDiv);
+        
+        var capExists = !!(window.Capacitor && window.Capacitor.Plugins);
+        testDiv.innerHTML += '<br>Capacitor: ' + (capExists ? '存在' : '不存在');
+        
+        fetch('https://wutong.xyz/api_ai_record.php?action=check_auth&dev_code=DEV_test123')
+        .then(function(r) { return r.text(); })
+        .then(function(t) { testDiv.innerHTML += '<br>fetch OK: ' + t.substring(0,80); })
+        .catch(function(e) { testDiv.innerHTML += '<br>fetch FAIL: ' + e.message; });
+        
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'https://wutong.xyz/api_ai_record.php?action=check_auth&dev_code=DEV_test456', true);
+        xhr.onload = function() { testDiv.innerHTML += '<br>XHR OK: ' + xhr.responseText.substring(0,80); };
+        xhr.onerror = function() { testDiv.innerHTML += '<br>XHR FAIL: status=' + xhr.status; };
+        xhr.send();
+    }, 1500);
+});
+</script>
+
 </body>
 </html>
 
