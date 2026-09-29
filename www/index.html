@@ -95,16 +95,36 @@ body {
 /* 加载 */
 .loading-card {
     flex: 1; display: none; flex-direction: column; align-items: center; justify-content: center;
-    gap: 14px; min-height: 150px;
+    gap: 20px; min-height: 200px; padding: 30px 20px;
 }
-.loading-card.show { display: flex; animation: fadeIn 0.3s ease; }
-.spinner {
-    width: 36px; height: 36px; border: 3px solid rgba(0,122,255,0.15);
-    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
+.loading-card.show { display: flex; animation: fadeIn 0.4s ease; }
+.loading-ring-wrap {
+    position: relative; width: 80px; height: 80px;
 }
+.loading-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 3px solid transparent;
+    border-top-color: #fff; border-right-color: rgba(255,255,255,0.6);
+    animation: spin 1s linear infinite;
+}
+.loading-ring-bg {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.15);
+}
+.loading-ring-inner {
+    position: absolute; inset: 12px; border-radius: 50%;
+    background: rgba(255,255,255,0.1); backdrop-filter: blur(10px);
+    display: flex; align-items: center; justify-content: center;
+}
+.loading-ring-inner svg { width: 28px; height: 28px; color: #fff; animation: pulse 1.5s ease-in-out infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.loading-text { font-size: 16px; color: var(--text); font-weight: 600; }
-.loading-sub { font-size: 13px; color: var(--text-secondary); }
+@keyframes pulse { 0%, 100% { opacity: 0.6; transform: scale(0.95); } 50% { opacity: 1; transform: scale(1.05); } }
+.loading-text { font-size: 18px; color: #fff; font-weight: 700; letter-spacing: 0.5px; text-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.loading-sub { font-size: 14px; color: rgba(255,255,255,0.7); font-weight: 500; }
+.loading-dots::after {
+    content: ''; animation: dots 1.5s steps(4, end) infinite;
+}
+@keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
 /* 结果 */
 .result-card { flex: 1; display: none; flex-direction: column; min-height: 0; padding: 10px; }
 .result-card.show { display: flex; animation: fadeIn 0.3s ease; }
@@ -263,9 +283,17 @@ body {
     </div>
     <button class="btn btn-primary" id="generateBtn" onclick="submitEdit()">开始生成</button>
     <div class="card loading-card" id="loadingCard">
-        <div class="spinner"></div>
-        <div class="loading-text" id="loadingText">AI 正在处理...</div>
-        <div class="loading-sub" id="loadingSub">请稍候</div>
+        <div class="loading-ring-wrap">
+            <div class="loading-ring-bg"></div>
+            <div class="loading-ring"></div>
+            <div class="loading-ring-inner">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z"/>
+                </svg>
+            </div>
+        </div>
+        <div class="loading-text"><span id="loadingText">AI 正在处理</span><span class="loading-dots"></span></div>
+        <div class="loading-sub" id="loadingSub">请稍候，正在为您创作</div>
     </div>
     <div class="card result-card" id="resultCard">
         <div class="result-slider" id="resultSlider">
