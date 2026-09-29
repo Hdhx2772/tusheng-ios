@@ -811,6 +811,16 @@ function setLoading(t, s) {
     }
 }
 
+// 接收原生日志
+window.nativeLog = function(logs) {
+    var lines = logs.split('\n');
+    lines.forEach(function(line) {
+        if (line && line.trim()) {
+            debugLog(line, 'LIFECYCLE');
+        }
+    });
+};
+
 // 增强版调试日志系统
 var debugLogs = [];
 var DEBUG_MAX_LINES = 500;
