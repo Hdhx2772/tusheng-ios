@@ -427,17 +427,22 @@ function doGenerate(prompt) {
     var fd = new FormData();
     fd.append('image', selectedFile);
     fd.append('prompt', prompt);
-    fetch(API_BASE + '/ai_edit.php', { method: 'POST', body: fd })
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
+    debugLog('开始上传图片...'); fetch(API_BASE + '/ai_edit.php', { method: 'POST', body: fd })
+    .then(function(r){ return r.text(); })
+    .then(function(raw) {
+        debugLog('上传返回: ' + raw.substring(0,150));
+        var data = JSON.parse(raw);
         if (data.error) throw new Error(data.error);
         setLoading('AI 正在处理...', '');
         var pollCount = 0;
         function poll() {
             pollCount++;
-            fetch(API_BASE + '/ai_edit.php?task_id=' + data.task_id)
-            .then(function(r){ return r.json(); })
-            .then(function(sData) {
+            debugLog('轮询第' + pollCount + '次...');
+            fetch(API_BASE + '/ai_edit.php?action=status&taskId=' + data.task_id)
+            .then(function(r){ return r.text(); })
+            .then(function(raw2) {
+                debugLog('轮询返回: ' + raw2.substring(0,100));
+                var sData = JSON.parse(raw2);
                 if (sData.status === 'completed') {
                     var elapsed = Math.round((Date.now()-startTime)/1000);
                     showToast('完成，用时 ' + elapsed + ' 秒', 2500);
@@ -461,6 +466,30 @@ function doGenerate(prompt) {
 function setLoading(t, s) {
     document.getElementById('loadingText').textContent = t;
     document.getElementById('loadingSub').textContent = s;
+    // 调试信息
+    var dbg = document.getElementById('debugBox');
+    if (!dbg) {
+        dbg = document.createElement('div');
+        dbg.id = 'debugBox';
+        dbg.style.cssText = 'position:fixed;bottom:60px;left:10px;right:10px;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;padding:8px;border-radius:8px;font-size:11px;font-family:monospace;max-height:120px;overflow-y:auto;';
+        document.body.appendChild(dbg);
+    }
+    var time = new Date().toLocaleTimeString();
+    dbg.innerHTML += '<br>[' + time + '] ' + t + (s ? ' (' + s + ')' : '');
+    dbg.scrollTop = dbg.scrollHeight;
+}
+
+function debugLog(msg) {
+    var dbg = document.getElementById('debugBox');
+    if (!dbg) {
+        dbg = document.createElement('div');
+        dbg.id = 'debugBox';
+        dbg.style.cssText = 'position:fixed;bottom:60px;left:10px;right:10px;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;padding:8px;border-radius:8px;font-size:11px;font-family:monospace;max-height:120px;overflow-y:auto;';
+        document.body.appendChild(dbg);
+    }
+    var time = new Date().toLocaleTimeString();
+    dbg.innerHTML += '<br>[' + time + '] ' + msg;
+    dbg.scrollTop = dbg.scrollHeight;
 }
 
 function resetUI() {
