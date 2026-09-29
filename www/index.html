@@ -235,13 +235,41 @@ body {
     border-radius: 10px; padding: 12px; margin: 12px 0; text-align: center;
     font-family: "SF Mono", Menlo, monospace; word-break: break-all;
 }
-/* 调试框 */
-.debug-box {
-    position: fixed; bottom: 60px; left: 8px; right: 8px; max-height: 120px;
-    background: rgba(0,0,0,0.85); color: #0f0; font-size: 10px; padding: 8px;
-    border-radius: 8px; overflow-y: auto; z-index: 3000; font-family: monospace;
-    display: none;
+/* 调试框 - 增强版 */
+#debugBox {
+    position: fixed; z-index: 999999;
+    background: rgba(10,10,15,0.95); color: #ddd;
+    border-radius: 10px; border: 1px solid rgba(255,255,255,0.15);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    font-family: 'SF Mono', Menlo, monospace; font-size: 10px;
+    overflow: hidden; display: none;
+    touch-action: none;
 }
+#debugBox .debug-header {
+    padding: 6px 10px; background: rgba(40,40,50,0.9);
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: move; user-select: none; border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+#debugBox .debug-title { color: #4fc3f7; font-weight: bold; font-size: 11px; }
+#debugBox .debug-actions { display: flex; gap: 6px; }
+#debugBox .debug-btn {
+    padding: 2px 8px; font-size: 10px; border-radius: 4px;
+    background: rgba(255,255,255,0.1); color: #ddd; border: none; cursor: pointer;
+}
+#debugBox .debug-btn:active { background: rgba(255,255,255,0.2); }
+#debugBox .debug-content {
+    padding: 6px 10px; max-height: 200px; overflow-y: auto;
+    line-height: 1.5; word-break: break-all;
+}
+#debugBox .log-line { margin: 1px 0; }
+#debugBox .log-INFO { color: #90caf9; }
+#debugBox .log-WARN { color: #ffb74d; }
+#debugBox .log-ERROR { color: #ef5350; }
+#debugBox .log-SUCCESS { color: #66bb6a; }
+#debugBox .log-NETWORK { color: #ce93d8; }
+#debugBox .log-LIFECYCLE { color: #4dd0e1; }
+#debugBox .log-ACTION { color: #fff59d; }
+#debugBox .log-time { color: #666; margin-right: 4px; }
 .debug-box.show { display: block; }
 /* 隐藏文件输入 */
 #fileInput { display: none; }
@@ -707,8 +735,14 @@ function pollTaskStatus() {
             if (pollCount >= 120) { isGenerating = false; showToast('生成超时，请稍后重试', 3000); resetUI(); return; }
             setTimeout(pollTaskStatus, 1500);
         } catch(e) {
-            isGenerating = false;
-            showToast('轮询解析错误: ' + raw2.substring(0,100), 3000); resetUI();
+            // 解析错误不重置UI，可能是临时网络问题，继续轮询
+            debugLog('轮询解析错误: ' + e.message + ' raw=' + raw2.substring(0,100), 'ERROR');
+            if (pollCount < 120) {
+                setTimeout(pollTaskStatus, 2000);
+            } else {
+                isGenerating = false;
+                showToast('生成超时，请稍后重试', 3000); resetUI();
+            }
         }
     };
     xhrPoll.onerror = function() { 
@@ -772,20 +806,198 @@ function setLoading(t, s) {
     }
 }
 
-function debugLog(msg) {
-    if (DEBUG_MODE) {
-        var dbg = document.getElementById('debugBox');
-        if (!dbg) {
-            dbg = document.createElement('div');
-            dbg.id = 'debugBox';
-            dbg.style.cssText = 'position:fixed;bottom:60px;left:10px;right:10px;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;padding:8px;border-radius:8px;font-size:11px;font-family:monospace;max-height:120px;overflow-y:auto;';
-            document.body.appendChild(dbg);
+// 增强版调试日志系统
+var debugLogs = [];
+var DEBUG_MAX_LINES = 500;
+
+function debugLog(msg, level) {
+    if (!DEBUG_MODE) return;
+    level = level || 'INFO';
+    var now = new Date();
+    var time = now.getHours().toString().padStart(2,'0') + ':' + 
+               now.getMinutes().toString().padStart(2,'0') + ':' + 
+               now.getSeconds().toString().padStart(2,'0') + '.' + 
+               now.getMilliseconds().toString().padStart(3,'0');
+    
+    var entry = { time: time, msg: String(msg), level: level };
+    debugLogs.push(entry);
+    if (debugLogs.length > DEBUG_MAX_LINES) debugLogs.shift();
+    
+    var dbg = document.getElementById('debugBox');
+    if (!dbg) {
+        createDebugBox();
+        dbg = document.getElementById('debugBox');
+    }
+    var contentEl = dbg.querySelector('.debug-content');
+    if (contentEl) {
+        var line = document.createElement('div');
+        line.className = 'log-line log-' + level;
+        line.innerHTML = '<span class="log-time">[' + time + ']</span>' + 
+                         '<span style="color:#888;margin-right:4px">[' + level + ']</span>' + 
+                         escapeHtml(String(msg));
+        contentEl.appendChild(line);
+        contentEl.scrollTop = contentEl.scrollHeight;
+        // 限制DOM节点数
+        while (contentEl.children.length > DEBUG_MAX_LINES) {
+            contentEl.removeChild(contentEl.firstChild);
         }
-        var time = new Date().toLocaleTimeString();
-        dbg.innerHTML += '<br>[' + time + '] ' + msg;
-        dbg.scrollTop = dbg.scrollHeight;
     }
 }
+
+function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function createDebugBox() {
+    var dbg = document.createElement('div');
+    dbg.id = 'debugBox';
+    dbg.style.cssText = 'top:80px;left:10px;right:10px;';
+    dbg.innerHTML = 
+        '<div class="debug-header">' +
+        '  <span class="debug-title">调试日志 (' + debugLogs.length + ')</span>' +
+        '  <div class="debug-actions">' +
+        '    <button class="debug-btn" onclick="copyDebugLog()">复制</button>' +
+        '    <button class="debug-btn" onclick="clearDebugLog()">清空</button>' +
+        '    <button class="debug-btn" onclick="closeDebugBox()">关闭</button>' +
+        '  </div>' +
+        '</div>' +
+        '<div class="debug-content"></div>';
+    document.body.appendChild(dbg);
+    
+    // 拖动功能
+    var header = dbg.querySelector('.debug-header');
+    var isDragging = false, startX, startY, startTop, startLeft;
+    header.addEventListener('touchstart', function(e) {
+        isDragging = true;
+        var touch = e.touches[0];
+        startX = touch.clientX; startY = touch.clientY;
+        var rect = dbg.getBoundingClientRect();
+        startTop = rect.top; startLeft = rect.left;
+        e.preventDefault();
+    });
+    header.addEventListener('touchmove', function(e) {
+        if (!isDragging) return;
+        var touch = e.touches[0];
+        var dx = touch.clientX - startX;
+        var dy = touch.clientY - startY;
+        dbg.style.top = Math.max(0, startTop + dy) + 'px';
+        dbg.style.left = Math.max(0, startLeft + dx) + 'px';
+        dbg.style.right = 'auto';
+        e.preventDefault();
+    });
+    header.addEventListener('touchend', function() { isDragging = false; });
+    
+    // 渲染已有日志
+    var contentEl = dbg.querySelector('.debug-content');
+    debugLogs.forEach(function(entry) {
+        var line = document.createElement('div');
+        line.className = 'log-line log-' + entry.level;
+        line.innerHTML = '<span class="log-time">[' + entry.time + ']</span>' + 
+                         '<span style="color:#888;margin-right:4px">[' + entry.level + ']</span>' + 
+                         escapeHtml(entry.msg);
+        contentEl.appendChild(line);
+    });
+    contentEl.scrollTop = contentEl.scrollHeight;
+}
+
+function copyDebugLog() {
+    var text = debugLogs.map(function(e) { 
+        return '[' + e.time + '][' + e.level + '] ' + e.msg; 
+    }).join('\n');
+    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Clipboard) {
+        Capacitor.Plugins.Clipboard.write({ string: text }).then(function() {
+            showToast('日志已复制', 1500);
+        }).catch(function() { fallbackCopy(text); });
+    } else {
+        fallbackCopy(text);
+    }
+}
+function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); showToast('日志已复制', 1500); } 
+    catch(e) { showToast('复制失败', 1500); }
+    document.body.removeChild(ta);
+}
+function clearDebugLog() {
+    debugLogs = [];
+    var contentEl = document.querySelector('#debugBox .debug-content');
+    if (contentEl) contentEl.innerHTML = '';
+    showToast('日志已清空', 1000);
+}
+function closeDebugBox() {
+    var dbg = document.getElementById('debugBox');
+    if (dbg) dbg.style.display = 'none';
+}
+
+// 网络请求拦截 - 记录所有XHR
+(function() {
+    var origOpen = XMLHttpRequest.prototype.open;
+    var origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(method, url) {
+        this._debugMethod = method;
+        this._debugUrl = url;
+        this._debugStartTime = Date.now();
+        return origOpen.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function(body) {
+        var self = this;
+        var url = this._debugUrl || '';
+        if (url.indexOf('ai_edit') > -1 || url.indexOf('api_ai') > -1 || url.indexOf('check') > -1) {
+            debugLog('请求: ' + (this._debugMethod || 'GET') + ' ' + url.substring(0,80), 'NETWORK');
+            if (body && typeof body === 'string' && body.length < 200) {
+                debugLog('参数: ' + body.substring(0,150), 'NETWORK');
+            }
+        }
+        this.addEventListener('load', function() {
+            var elapsed = Date.now() - self._debugStartTime;
+            if (url.indexOf('ai_edit') > -1 || url.indexOf('api_ai') > -1 || url.indexOf('check') > -1) {
+                var resp = self.responseText || '';
+                debugLog('响应: ' + self.status + ' ' + elapsed + 'ms ' + resp.substring(0,120), 'NETWORK');
+            }
+        });
+        this.addEventListener('error', function() {
+            var elapsed = Date.now() - self._debugStartTime;
+            if (url.indexOf('ai_edit') > -1 || url.indexOf('api_ai') > -1) {
+                debugLog('请求失败: ' + url.substring(0,60) + ' ' + elapsed + 'ms', 'ERROR');
+            }
+        });
+        return origSend.apply(this, arguments);
+    };
+})();
+
+// 生命周期监听
+document.addEventListener('visibilitychange', function() {
+    debugLog('页面状态: ' + (document.hidden ? '进入后台' : '回到前台'), 'LIFECYCLE');
+});
+window.addEventListener('pageshow', function(e) {
+    debugLog('pageshow: persisted=' + e.persisted, 'LIFECYCLE');
+});
+window.addEventListener('pagehide', function() {
+    debugLog('pagehide: 页面即将隐藏', 'LIFECYCLE');
+});
+window.addEventListener('online', function() {
+    debugLog('网络状态: 在线', 'LIFECYCLE');
+});
+window.addEventListener('offline', function() {
+    debugLog('网络状态: 离线', 'LIFECYCLE');
+});
+
+// 记录用户操作
+document.addEventListener('click', function(e) {
+    var target = e.target;
+    var tag = target.tagName;
+    var text = (target.textContent || '').trim().substring(0,20);
+    var id = target.id || '';
+    if (tag === 'BUTTON' || target.closest('button') || tag === 'A' || target.closest('a')) {
+        var btn = target.closest('button') || target.closest('a') || target;
+        var btnText = (btn.textContent || '').trim().substring(0,20);
+        debugLog('点击: ' + btn.tagName + ' "' + btnText + '"' + (btn.id ? ' id=' + btn.id : ''), 'ACTION');
+    }
+}, true);
 
 // 连续点击标题5次切换调试模式
 var titleClickCount = 0;
