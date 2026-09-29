@@ -459,7 +459,7 @@ function doGenerate(prompt) {
                         if (sData.status === 'completed') {
                             var elapsed = Math.round((Date.now()-startTime)/1000);
                             showToast('完成，用时 ' + elapsed + ' 秒', 2500);
-                            var resultUrl = sData.result_url || sData.output_url || sData.image_url || sData.url || (sData.images && sData.images[0]) || '';
+                            var resultUrl = sData.image || sData.result_url || sData.output_url || sData.image_url || sData.url || (sData.images && sData.images[0]) || '';
                             debugLog('结果URL: ' + resultUrl + ' 完整响应: ' + JSON.stringify(sData).substring(0,300));
                             if (!resultUrl) { showToast('未获取到结果图片', 3000); resetUI(); return; }
                             var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
