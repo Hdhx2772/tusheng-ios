@@ -459,10 +459,13 @@ function doGenerate(prompt) {
                         if (sData.status === 'completed') {
                             var elapsed = Math.round((Date.now()-startTime)/1000);
                             showToast('完成，用时 ' + elapsed + ' 秒', 2500);
+                            var resultUrl = sData.result_url || sData.output_url || sData.image_url || sData.url || (sData.images && sData.images[0]) || '';
+                            debugLog('结果URL: ' + resultUrl + ' 完整响应: ' + JSON.stringify(sData).substring(0,300));
+                            if (!resultUrl) { showToast('未获取到结果图片', 3000); resetUI(); return; }
                             var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
-                            hist.unshift({ prompt: prompt, imagePath: sData.result_url });
+                            hist.unshift({ prompt: prompt, imagePath: resultUrl });
                             localStorage.setItem('edit_history', JSON.stringify(hist.slice(0,50)));
-                            showResult(sData.result_url);
+                            showResult(resultUrl);
                             return;
                         }
                         if (sData.status === 'failed') { showToast('失败：' + (sData.error || '生成失败'), 3000); resetUI(); return; }
@@ -551,6 +554,50 @@ function showResult(url) {
     document.getElementById('resultBefore').src = document.getElementById('previewImg').src;
     document.getElementById('resultBeforeWrap').style.width = '50%';
     document.getElementById('resultHandle').style.left = '50%';
+    initSlider();
+}
+
+var isDragging = false;
+function initSlider() {
+    var slider = document.getElementById('resultSlider');
+    var beforeWrap = document.getElementById('resultBeforeWrap');
+    var handle = document.getElementById('resultHandle');
+    if (!slider || !beforeWrap || !handle) return;
+
+    function updateSlider(clientX) {
+        var rect = slider.getBoundingClientRect();
+        var percent = ((clientX - rect.left) / rect.width) * 100;
+        percent = Math.max(0, Math.min(100, percent));
+        beforeWrap.style.width = percent + '%';
+        handle.style.left = percent + '%';
+    }
+
+    slider.addEventListener('touchstart', function(e) {
+        isDragging = true;
+        updateSlider(e.touches[0].clientX);
+        e.preventDefault();
+    }, { passive: false });
+
+    slider.addEventListener('touchmove', function(e) {
+        if (isDragging) {
+            updateSlider(e.touches[0].clientX);
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+    slider.addEventListener('touchend', function() { isDragging = false; });
+
+    slider.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        updateSlider(e.clientX);
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (isDragging) updateSlider(e.clientX);
+    });
+
+    document.addEventListener('mouseup', function() { isDragging = false; });
 }
 
 function downloadResult() {
