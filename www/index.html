@@ -633,6 +633,7 @@ function submitEdit() {
 }
 
 function doGenerate(prompt) {
+    resultShown = false;
     document.getElementById('uploadCard').style.display = 'none';
     document.getElementById('previewCard').classList.remove('show');
     document.getElementById('inputCard').style.display = 'none';
@@ -675,7 +676,7 @@ function doGenerate(prompt) {
 
 // 轮询任务状态（支持后台恢复）
 function pollTaskStatus() {
-    if (!currentTaskId) return;
+    if (!isGenerating || !currentTaskId) return;
     pollCount++;
     debugLog('轮询第' + pollCount + '次 taskId=' + currentTaskId);
     var xhrPoll = new XMLHttpRequest();
@@ -851,9 +852,11 @@ function escapeHtml(str) {
 }
 
 function createDebugBox() {
-    var dbg = document.createElement('div');
+    var dbg = document.getElementById('debugBox');
+    if (dbg) { dbg.style.display = 'block'; return; }
+    dbg = document.createElement('div');
     dbg.id = 'debugBox';
-    dbg.style.cssText = 'top:80px;left:10px;right:10px;';
+    dbg.style.cssText = 'top:80px;left:10px;right:10px;display:block;';
     dbg.innerHTML = 
         '<div class="debug-header">' +
         '  <span class="debug-title">调试日志 (' + debugLogs.length + ')</span>' +
@@ -1056,7 +1059,10 @@ function showBanModal(reason) {
 }
 function closeBanModal() { document.getElementById('banModal').classList.remove('show'); }
 
+var resultShown = false;
 function showResult(url) {
+    if (resultShown) { try { debugLog('showResult被重复调用，忽略', 'WARN'); } catch(e){} return; }
+    resultShown = true;
     stopBackgroundAudio();
     resultImageUrl = url;
     lastPrompt = document.getElementById('promptInput').value.trim();
