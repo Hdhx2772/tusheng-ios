@@ -1,0 +1,17 @@
+﻿{
+  "appId": "com.tusheng.wanwu",
+  "appName": "图生万物",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "always"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "backgroundColor": "#1a1a2e"
+    }
+  }
+}
