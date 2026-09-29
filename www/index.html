@@ -398,14 +398,22 @@ function submitEdit() {
     if (!prompt) { showToast('请输入修改描述'); return; }
     var devCode = getDeviceCode();
     showToast('检查授权...', 1000);
-    fetch(API_BASE + '/api_ai_record.php?action=check_auth&dev_code=' + devCode)
-    .then(function(r){ return r.json(); })
-    .then(function(authData) {
-        if (authData.status === 'banned') { showBanModal(authData.reason); return; }
-        if (!authData.authorized) { showAuthModal(); return; }
-        doGenerate(prompt);
+    var fdAuth = new FormData();
+    fdAuth.append('action', 'check_auth');
+    fdAuth.append('device_id', devCode);
+    fetch(API_BASE + '/api_ai_record.php', { method: 'POST', body: fdAuth })
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+        try {
+            var authData = JSON.parse(t);
+            if (authData.status === 'banned') { showBanModal(authData.reason); return; }
+            if (!authData.authorized) { showAuthModal(); return; }
+            doGenerate(prompt);
+        } catch(e) {
+            showToast('授权解析错误: ' + t.substring(0,100));
+        }
     })
-    .catch(function(){ showToast('网络异常，请稍后重试'); });
+    .catch(function(e){ showToast('授权网络异常: ' + e.message); });
 }
 
 function doGenerate(prompt) {
@@ -581,31 +589,7 @@ window.addEventListener('load', function() {
 });
 </script>
 
-<script>
-window.addEventListener('load', function() {
-    setTimeout(function() {
-        var testDiv = document.createElement('div');
-        testDiv.style.cssText = 'position:fixed;top:50px;left:10px;right:10px;z-index:99999;background:rgba(0,0,0,0.9);color:#0f0;padding:10px;border-radius:8px;font-size:12px;';
-        testDiv.id = 'netTest';
-        testDiv.innerHTML = '=== 网络测试 ===';
-        document.body.appendChild(testDiv);
-        
-        var capExists = !!(window.Capacitor && window.Capacitor.Plugins);
-        testDiv.innerHTML += '<br>Capacitor: ' + (capExists ? '存在' : '不存在');
-        
-        fetch('https://wutong.xyz/api_ai_record.php?action=check_auth&dev_code=DEV_test123')
-        .then(function(r) { return r.text(); })
-        .then(function(t) { testDiv.innerHTML += '<br>fetch OK: ' + t.substring(0,80); })
-        .catch(function(e) { testDiv.innerHTML += '<br>fetch FAIL: ' + e.message; });
-        
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', 'https://wutong.xyz/api_ai_record.php?action=check_auth&dev_code=DEV_test456', true);
-        xhr.onload = function() { testDiv.innerHTML += '<br>XHR OK: ' + xhr.responseText.substring(0,80); };
-        xhr.onerror = function() { testDiv.innerHTML += '<br>XHR FAIL: status=' + xhr.status; };
-        xhr.send();
-    }, 1500);
-});
-</script>
+
 
 </body>
 </html>
