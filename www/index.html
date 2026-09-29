@@ -410,6 +410,12 @@ var originalImageData = null;
 var lastPrompt = '';
 var resultImageUrl = null;
 var currentHistoryIndex = -1;
+// 后台生成支持
+var currentTaskId = null;
+var currentPrompt = '';
+var generationStartTime = 0;
+var isGenerating = false;
+var pollCount = 0;
 var API_BASE = 'https://wutong.xyz';
 var APP_VERSION = '1.1';
 function showToast(msg, dur) {
@@ -598,7 +604,9 @@ function doGenerate(prompt) {
     document.getElementById('generateBtn').style.display = 'none';
     document.getElementById('loadingCard').classList.add('show');
     setLoading('正在上传图片...', '');
-    var startTime = Date.now();
+    generationStartTime = Date.now();
+    currentPrompt = prompt;
+    isGenerating = true;
     var fd = new FormData();
     fd.append('image', selectedFile);
     fd.append('prompt', prompt);
@@ -611,68 +619,110 @@ function doGenerate(prompt) {
         debugLog('上传返回: ' + raw.substring(0,150));
         try {
             var data = JSON.parse(raw);
-            var taskId = data.taskId || data.task_id || '';
-            debugLog('解析后: taskId=' + (taskId || '未找到'));
-            if (data.error) { showToast('失败：' + data.error, 3000); resetUI(); return; }
-            if (!taskId) { showToast('失败：未获取到任务ID', 3000); resetUI(); return; }
+            currentTaskId = data.taskId || data.task_id || '';
+            debugLog('解析后: taskId=' + (currentTaskId || '未找到'));
+            if (data.error) { isGenerating = false; showToast('失败：' + data.error, 3000); resetUI(); return; }
+            if (!currentTaskId) { isGenerating = false; showToast('失败：未获取到任务ID', 3000); resetUI(); return; }
             setLoading('AI 正在处理...', '');
-            var pollCount = 0;
-            function poll() {
-                pollCount++;
-                debugLog('轮询第' + pollCount + '次 taskId=' + taskId);
-                var xhrPoll = new XMLHttpRequest();
-                xhrPoll.open('GET', API_BASE + '/ai_edit.php?action=status&taskId=' + encodeURIComponent(taskId), true);
-                xhrPoll.timeout = 30000;
-                xhrPoll.onload = function() {
-                    var raw2 = xhrPoll.responseText;
-                    debugLog('轮询返回: ' + raw2.substring(0,100));
-                    try {
-                        var sData = JSON.parse(raw2);
-                        if (sData.status === 'completed') {
-                            var elapsed = Math.round((Date.now()-startTime)/1000);
-                            showToast('完成，用时 ' + elapsed + ' 秒', 2500);
-                            var resultUrl = sData.image || sData.result_url || sData.output_url || sData.image_url || sData.url || (sData.images && sData.images[0]) || '';
-                            debugLog('结果URL: ' + resultUrl + ' 完整响应: ' + JSON.stringify(sData).substring(0,300));
-                            if (!resultUrl) { showToast('未获取到结果图片', 3000); resetUI(); return; }
-                            var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
-                            hist.unshift({ prompt: prompt, imagePath: resultUrl });
-                            localStorage.setItem('edit_history', JSON.stringify(hist.slice(0,50)));
-                            // 上传记录到服务器
-                            try {
-                                var recXhr = new XMLHttpRequest();
-                                recXhr.open('POST', API_BASE + '/api_ai_record.php', true);
-                                recXhr.timeout = 10000;
-                                var recFd = new FormData();
-                                recFd.append('action', 'upload');
-                                recFd.append('device_id', getDeviceCode());
-                                recFd.append('prompt', prompt);
-                                recFd.append('image_url', resultUrl);
-                                recXhr.send(recFd);
-                            } catch(e) {}
-                            showResult(resultUrl);
-                            return;
-                        }
-                        if (sData.status === 'failed') { showToast('失败：' + (sData.error || '生成失败'), 3000); resetUI(); return; }
-                        if (sData.error) { showToast('失败：' + sData.error, 3000); resetUI(); return; }
-                        if (pollCount >= 80) { showToast('生成超时，请稍后重试', 3000); resetUI(); return; }
-                        setTimeout(poll, 1500);
-                    } catch(e) {
-                        showToast('轮询解析错误: ' + raw2.substring(0,100), 3000); resetUI();
-                    }
-                };
-                xhrPoll.onerror = function() { showToast('轮询网络异常', 3000); resetUI(); };
-                xhrPoll.ontimeout = function() { showToast('轮询超时', 3000); resetUI(); };
-                xhrPoll.send();
-            }
-            poll();
+            pollCount = 0;
+            pollTaskStatus();
         } catch(e) {
+            isGenerating = false;
             showToast('上传解析错误: ' + raw.substring(0,100), 3000); resetUI();
         }
     };
-    xhrUpload.onerror = function() { showToast('上传网络异常，请检查网络', 3000); resetUI(); };
-    xhrUpload.ontimeout = function() { showToast('上传超时，请重试', 3000); resetUI(); };
+    xhrUpload.onerror = function() { isGenerating = false; showToast('上传网络异常，请检查网络', 3000); resetUI(); };
+    xhrUpload.ontimeout = function() { isGenerating = false; showToast('上传超时，请重试', 3000); resetUI(); };
     xhrUpload.send(fd);
 }
+
+// 轮询任务状态（支持后台恢复）
+function pollTaskStatus() {
+    if (!currentTaskId) return;
+    pollCount++;
+    debugLog('轮询第' + pollCount + '次 taskId=' + currentTaskId);
+    var xhrPoll = new XMLHttpRequest();
+    xhrPoll.open('GET', API_BASE + '/ai_edit.php?action=status&taskId=' + encodeURIComponent(currentTaskId), true);
+    xhrPoll.timeout = 30000;
+    xhrPoll.onload = function() {
+        var raw2 = xhrPoll.responseText;
+        debugLog('轮询返回: ' + raw2.substring(0,100));
+        try {
+            var sData = JSON.parse(raw2);
+            if (sData.status === 'completed') {
+                isGenerating = false;
+                var elapsed = Math.round((Date.now()-generationStartTime)/1000);
+                showToast('完成，用时 ' + elapsed + ' 秒', 2500);
+                var resultUrl = sData.image || sData.result_url || sData.output_url || sData.image_url || sData.url || (sData.images && sData.images[0]) || '';
+                debugLog('结果URL: ' + resultUrl + ' 完整响应: ' + JSON.stringify(sData).substring(0,300));
+                if (!resultUrl) { showToast('未获取到结果图片', 3000); resetUI(); return; }
+                var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
+                hist.unshift({ prompt: currentPrompt, imagePath: resultUrl });
+                localStorage.setItem('edit_history', JSON.stringify(hist.slice(0,50)));
+                // 上传记录到服务器
+                try {
+                    var recXhr = new XMLHttpRequest();
+                    recXhr.open('POST', API_BASE + '/api_ai_record.php', true);
+                    recXhr.timeout = 10000;
+                    var recFd = new FormData();
+                    recFd.append('action', 'upload');
+                    recFd.append('device_id', getDeviceCode());
+                    recFd.append('prompt', currentPrompt);
+                    recFd.append('image_url', resultUrl);
+                    recXhr.send(recFd);
+                } catch(e) {}
+                showResult(resultUrl);
+                return;
+            }
+            if (sData.status === 'failed') { isGenerating = false; showToast('失败：' + (sData.error || '生成失败'), 3000); resetUI(); return; }
+            if (sData.error) { isGenerating = false; showToast('失败：' + sData.error, 3000); resetUI(); return; }
+            if (pollCount >= 120) { isGenerating = false; showToast('生成超时，请稍后重试', 3000); resetUI(); return; }
+            setTimeout(pollTaskStatus, 1500);
+        } catch(e) {
+            isGenerating = false;
+            showToast('轮询解析错误: ' + raw2.substring(0,100), 3000); resetUI();
+        }
+    };
+    xhrPoll.onerror = function() { 
+        // 网络错误不立即失败，可能是后台切换导致，重试一次
+        if (pollCount < 120) {
+            setTimeout(pollTaskStatus, 2000);
+        } else {
+            isGenerating = false;
+            showToast('轮询网络异常', 3000); resetUI();
+        }
+    };
+    xhrPoll.ontimeout = function() { 
+        if (pollCount < 120) {
+            setTimeout(pollTaskStatus, 2000);
+        } else {
+            isGenerating = false;
+            showToast('轮询超时', 3000); resetUI();
+        }
+    };
+    xhrPoll.send();
+}
+
+// 回到前台时检查任务状态
+function checkTaskOnResume() {
+    if (isGenerating && currentTaskId) {
+        debugLog('回到前台，检查任务状态 taskId=' + currentTaskId);
+        setLoading('AI 正在处理...', '');
+        // 重置轮询计数，继续等待
+        pollCount = Math.max(0, pollCount - 10);
+        pollTaskStatus();
+    }
+}
+
+// 监听页面可见性变化（后台/前台切换）
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        setTimeout(checkTaskOnResume, 500);
+    }
+});
+window.addEventListener('pageshow', function() {
+    setTimeout(checkTaskOnResume, 500);
+});
 
 var DEBUG_MODE = localStorage.getItem('debug_mode') === '1';
 
@@ -763,40 +813,61 @@ function closeBanModal() { document.getElementById('banModal').classList.remove(
 function showResult(url) {
     resultImageUrl = url;
     lastPrompt = document.getElementById('promptInput').value.trim();
-    document.getElementById('loadingCard').classList.remove('show');
-    document.getElementById('resultCard').classList.add('show');
     
-    var afterImg = document.getElementById('resultAfter');
-    var beforeImg = document.getElementById('resultBefore');
-    var slider = document.getElementById('resultSlider');
-    
-    // 设置 before 图片（原图）
-    if (originalImageData) {
-        beforeImg.src = originalImageData;
-    }
-    
-    // 直接设置 after 图片，不用 opacity 过渡
-    afterImg.style.opacity = '1';
-    afterImg.onload = function() {
-        // 图片加载完成后设置 before 宽度
-        if (slider && beforeImg) {
-            beforeImg.style.width = slider.offsetWidth + 'px';
+    // 先预加载图片，加载完成后再显示结果页
+    setLoading('正在加载结果...', '');
+    var preloadImg = new Image();
+    preloadImg.crossOrigin = 'anonymous';
+    preloadImg.onload = function() {
+        // 图片加载完成，显示结果页
+        document.getElementById('loadingCard').classList.remove('show');
+        document.getElementById('resultCard').classList.add('show');
+        
+        var afterImg = document.getElementById('resultAfter');
+        var beforeImg = document.getElementById('resultBefore');
+        var slider = document.getElementById('resultSlider');
+        
+        // 设置 before 图片（原图）
+        if (originalImageData) {
+            beforeImg.src = originalImageData;
         }
+        
+        // 直接设置 after 图片（已经缓存，立即显示）
+        afterImg.style.opacity = '1';
+        afterImg.src = url;
+        
+        // 初始化滑块位置和 before 宽度
+        document.getElementById('resultBeforeWrap').style.width = '50%';
+        document.getElementById('resultHandle').style.left = '50%';
+        if (slider && beforeImg) {
+            setTimeout(function() {
+                beforeImg.style.width = slider.offsetWidth + 'px';
+            }, 50);
+        }
+        initSlider();
+        
+        var elapsed = Math.round((Date.now()-generationStartTime)/1000);
+        showToast('生成完成，用时 ' + elapsed + ' 秒', 2500);
     };
-    afterImg.onerror = function() {
-        showToast('图片加载失败，请重试', 3000);
+    preloadImg.onerror = function() {
+        // 图片加载失败，仍然显示结果页，让用户可以重试
+        document.getElementById('loadingCard').classList.remove('show');
+        document.getElementById('resultCard').classList.add('show');
+        var afterImg = document.getElementById('resultAfter');
+        afterImg.src = url;
+        showToast('图片加载较慢，请稍候', 2500);
+        var slider = document.getElementById('resultSlider');
+        var beforeImg = document.getElementById('resultBefore');
+        document.getElementById('resultBeforeWrap').style.width = '50%';
+        document.getElementById('resultHandle').style.left = '50%';
+        if (slider && beforeImg) {
+            setTimeout(function() {
+                beforeImg.style.width = slider.offsetWidth + 'px';
+            }, 50);
+        }
+        initSlider();
     };
-    afterImg.src = url;
-    
-    // 初始化滑块位置和 before 宽度
-    document.getElementById('resultBeforeWrap').style.width = '50%';
-    document.getElementById('resultHandle').style.left = '50%';
-    if (slider && beforeImg) {
-        setTimeout(function() {
-            beforeImg.style.width = slider.offsetWidth + 'px';
-        }, 100);
-    }
-    initSlider();
+    preloadImg.src = url;
 }
 
 var isDragging = false;
