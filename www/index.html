@@ -148,15 +148,15 @@ body {
 .history-empty { text-align: center; padding: 60px 20px; color: var(--text-secondary); grid-column: 1/-1; font-size: 15px; }
 /* Tab Bar - 毛玻璃 */
 .tab-bar {
-    height: 52px; background: rgba(0,0,0,0.45); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+    background: rgba(0,0,0,0.55); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
     border-top: 0.5px solid rgba(255,255,255,0.15); display: flex; flex-shrink: 0;
-    padding-bottom: env(safe-area-inset-bottom); z-index: 100;
-    box-shadow: 0 -4px 24px rgba(0,0,0,0.2);
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom)); z-index: 100;
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.25);
 }
 .tab-item {
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 4px; cursor: pointer; color: rgba(255,255,255,0.5); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative; padding-top: 6px;
+    gap: 3px; cursor: pointer; color: rgba(255,255,255,0.5); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
 }
 .tab-item.active { color: #fff; }
 .tab-item.active::before {
