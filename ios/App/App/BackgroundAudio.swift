@@ -2,6 +2,7 @@ import Foundation
 import Capacitor
 import AVFoundation
 import UserNotifications
+import CryptoKit
 
 @objc(BackgroundAudio)
 public class BackgroundAudio: CAPPlugin, CAPBridgedPlugin {
@@ -13,6 +14,8 @@ public class BackgroundAudio: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "startPolling", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopPolling", returnType: CAPPluginReturnPromise)
     ]
+    
+    private let API_SECRET = "tsw_2024_secure_a1b2c3d4e5f6g7h8"
     
     private var audioPlayer: AVAudioPlayer?
     private var pollingTask: URLSessionDataTask?
@@ -95,24 +98,56 @@ public class BackgroundAudio: CAPPlugin, CAPBridgedPlugin {
     // 单次轮询
     private func pollOnce(url: String) {
         guard isPolling else { return }
-        guard let url = URL(string: url) else { return }
+        guard let urlObj = URL(string: url) else { return }
         
         pollCount += 1
         print("🔄 原生轮询第\(pollCount)次")
         
-        let task = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+        // 生成签名
+        let timestamp = String(Int(Date().timeIntervalSince1970))
+        let nonce = UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(16).description
+        
+        // 从 URL 解析查询参数
+        var params: [String: String] = [:]
+        if let components = URLComponents(url: urlObj, resolvingAgainstBaseURL: false),
+           let queryItems = components.queryItems {
+            for item in queryItems {
+                if let value = item.value {
+                    params[item.name] = value
+                }
+            }
+        }
+        params["timestamp"] = timestamp
+        params["nonce"] = nonce
+        
+        // 按字典序排序并拼接
+        let sortedKeys = params.keys.sorted()
+        let message = sortedKeys.map { "\($0)=\(params[$0]!)" }.joined(separator: "&")
+        
+        // 计算 HMAC-SHA256 签名
+        let key = SymmetricKey(data: API_SECRET.data(using: .utf8)!)
+        let signature = HMAC<SHA256>.authenticationCode(for: message.data(using: .utf8)!, using: key)
+        let signatureHex = signature.map { String(format: "%02x", $0) }.joined()
+        
+        // 创建请求并添加签名头
+        var request = URLRequest(url: urlObj)
+        request.setValue(timestamp, forHTTPHeaderField: "X-Auth-Timestamp")
+        request.setValue(nonce, forHTTPHeaderField: "X-Auth-Nonce")
+        request.setValue(signatureHex, forHTTPHeaderField: "X-Auth-Signature")
+        
+        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             guard let self = self else { return }
             guard self.isPolling else { return }
             
             if let error = error {
                 print("❌ 原生轮询失败: \(error.localizedDescription)")
                 // 失败后继续轮询
-                self.scheduleNextPoll(url: url.absoluteString)
+                self.scheduleNextPoll(url: url)
                 return
             }
             
             guard let data = data, let raw = String(data: data, encoding: .utf8) else {
-                self.scheduleNextPoll(url: url.absoluteString)
+                self.scheduleNextPoll(url: url)
                 return
             }
             

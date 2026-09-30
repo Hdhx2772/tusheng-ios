@@ -453,6 +453,54 @@ var pollCount = 0;
 var historySaved = false;
 var wasInBackgroundDuringGeneration = false; // 防止重复保存历史记录
 var API_BASE = 'https://wutong.xyz';
+
+// ========== API 签名验证（HMAC-SHA256） ==========
+var API_SECRET = 'tsw_2024_secure_a1b2c3d4e5f6g7h8';
+
+// 生成随机字符串
+function generateNonce(length) {
+    length = length || 16;
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    var nonce = '';
+    for (var i = 0; i < length; i++) {
+        nonce += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return nonce;
+}
+
+// HMAC-SHA256 签名（异步，用 Web Crypto API）
+async function hmacSha256(message, secret) {
+    var encoder = new TextEncoder();
+    var keyData = encoder.encode(secret);
+    var messageData = encoder.encode(message);
+    var key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    var signature = await crypto.subtle.sign('HMAC', key, messageData);
+    var hashArray = Array.from(new Uint8Array(signature));
+    return hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
+
+// 生成签名参数（异步）
+async function generateSig(params) {
+    var timestamp = Math.floor(Date.now() / 1000).toString();
+    var nonce = generateNonce(16);
+    var allParams = {};
+    for (var k in params) { allParams[k] = params[k]; }
+    allParams['timestamp'] = timestamp;
+    allParams['nonce'] = nonce;
+    var sortedKeys = Object.keys(allParams).sort();
+    var message = sortedKeys.map(function(key) { return key + '=' + allParams[key]; }).join('&');
+    var sign = await hmacSha256(message, API_SECRET);
+    return { timestamp: timestamp, nonce: nonce, sign: sign };
+}
+
+// 给 XHR 添加签名请求头
+async function addSigToXhr(xhr, params) {
+    var sig = await generateSig(params);
+    xhr.setRequestHeader('X-Auth-Timestamp', sig.timestamp);
+    xhr.setRequestHeader('X-Auth-Nonce', sig.nonce);
+    xhr.setRequestHeader('X-Auth-Signature', sig.sign);
+}
+// ========== API 签名验证结束 ==========
 var APP_VERSION = '1.1';
 function showToast(msg, dur) {
     dur = dur || 2000;
@@ -642,7 +690,7 @@ function showTabBar() {
     }, 100);
 }
 
-function submitEdit() {
+async function submitEdit() {
     if (!selectedFile) { showToast('请先选择图片'); return; }
     var prompt = document.getElementById('promptInput').value.trim();
     if (!prompt) { showToast('请输入修改描述'); return; }
@@ -652,6 +700,7 @@ function submitEdit() {
     var xhrAuth = new XMLHttpRequest();
     xhrAuth.open('POST', API_BASE + '/api_ai_record.php', true);
     xhrAuth.timeout = 15000;
+    await addSigToXhr(xhrAuth, { action: 'check_auth', device_id: devCode });
     xhrAuth.onload = function() {
         debugLog('授权检查响应: ' + xhrAuth.status + ' ' + xhrAuth.responseText.substring(0,150), 'NETWORK');
         try {
@@ -673,7 +722,7 @@ function submitEdit() {
     xhrAuth.send(fdAuth);
 }
 
-function doGenerate(prompt) {
+async function doGenerate(prompt) {
     resultShown = false;
     document.getElementById('uploadCard').style.display = 'none';
     document.getElementById('previewCard').classList.remove('show');
@@ -693,6 +742,7 @@ function doGenerate(prompt) {
     var xhrUpload = new XMLHttpRequest();
     xhrUpload.open('POST', API_BASE + '/ai_edit.php', true);
     xhrUpload.timeout = 120000;
+    await addSigToXhr(xhrUpload, { action: 'upload', prompt: prompt });
     xhrUpload.upload.onprogress = function(e) {
         if (e.lengthComputable) {
             var pct = Math.round(e.loaded / e.total * 100);
@@ -730,13 +780,14 @@ function doGenerate(prompt) {
 }
 
 // 轮询任务状态（支持后台恢复）
-function pollTaskStatus() {
+async function pollTaskStatus() {
     if (!isGenerating || !currentTaskId) return;
     pollCount++;
     debugLog('轮询第' + pollCount + '次 taskId=' + currentTaskId);
     var xhrPoll = new XMLHttpRequest();
     xhrPoll.open('GET', API_BASE + '/ai_edit.php?action=status&taskId=' + encodeURIComponent(currentTaskId), true);
     xhrPoll.timeout = 30000;
+    await addSigToXhr(xhrPoll, { action: 'status', taskId: currentTaskId });
     xhrPoll.onload = function() {
         var raw2 = xhrPoll.responseText;
         debugLog('轮询返回: ' + raw2.substring(0,100));
@@ -761,6 +812,9 @@ function pollTaskStatus() {
                         var recXhr = new XMLHttpRequest();
                         recXhr.open('POST', API_BASE + '/api_ai_record.php', true);
                         recXhr.timeout = 15000;
+                        (async function() {
+                            await addSigToXhr(recXhr, { action: 'upload', device_id: getDeviceCode(), image_url: resultImageUrl });
+                        })();
                         var recFd = new FormData();
                         recFd.append('action', 'upload');
                         recFd.append('device_id', getDeviceCode());
@@ -1534,10 +1588,11 @@ function versionCompare(v1, v2) {
     return 0;
 }
 
-function checkServerConfig() {
+async function checkServerConfig() {
     var xhr = new XMLHttpRequest();
     xhr.open('GET', API_BASE + '/ai_edit.php?action=config', true);
     xhr.timeout = 10000;
+    await addSigToXhr(xhr, { action: 'config' });
     xhr.onload = function() {
         try {
             var cfg = JSON.parse(xhr.responseText);
