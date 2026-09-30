@@ -542,21 +542,57 @@ function fixImageOrientation(file, callback) {
     });
 }
 
+// 压缩图片（限制最大边长，降低体积）
+function compressImage(file, maxSize, quality, callback) {
+    maxSize = maxSize || 2048;
+    quality = quality || 0.85;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        var img = new Image();
+        img.onload = function() {
+            var w = img.width, h = img.height;
+            var scale = Math.min(1, maxSize / Math.max(w, h));
+            if (scale === 1 && file.size < 2*1024*1024) {
+                callback(file);
+                return;
+            }
+            var nw = Math.round(w * scale);
+            var nh = Math.round(h * scale);
+            var canvas = document.createElement('canvas');
+            canvas.width = nw;
+            canvas.height = nh;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, nw, nh);
+            canvas.toBlob(function(blob) {
+                var compressedFile = new File([blob], 'compressed.jpg', { type: 'image/jpeg' });
+                debugLog('图片压缩: ' + (file.size/1024).toFixed(0) + 'KB -> ' + (compressedFile.size/1024).toFixed(0) + 'KB (' + nw + 'x' + nh + ')');
+                callback(compressedFile);
+            }, 'image/jpeg', quality);
+        };
+        img.onerror = function() { callback(file); };
+        img.src = e.target.result;
+    };
+    reader.onerror = function() { callback(file); };
+    reader.readAsDataURL(file);
+}
+
 function handleFile(file) {
     var allowed = ['image/jpeg','image/png','image/webp'];
     if (allowed.indexOf(file.type) === -1) { showToast('只支持 JPG、PNG、WebP'); return; }
     if (file.size > 10*1024*1024) { showToast('图片不能超过 10MB'); return; }
     showToast('正在处理图片...', 800);
     fixImageOrientation(file, function(fixedFile) {
-        selectedFile = fixedFile;
-        var reader = new FileReader();
-        reader.onload = function(e) {
-            originalImageData = e.target.result;
-            document.getElementById('previewImg').src = e.target.result;
-            document.getElementById('uploadCard').style.display = 'none';
-            document.getElementById('previewCard').classList.add('show');
-        };
-        reader.readAsDataURL(fixedFile);
+        compressImage(fixedFile, 2048, 0.85, function(compressedFile) {
+            selectedFile = compressedFile;
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                originalImageData = e.target.result;
+                document.getElementById('previewImg').src = e.target.result;
+                document.getElementById('uploadCard').style.display = 'none';
+                document.getElementById('previewCard').classList.add('show');
+            };
+            reader.readAsDataURL(compressedFile);
+        });
     });
 }
 
@@ -656,6 +692,12 @@ function doGenerate(prompt) {
     var xhrUpload = new XMLHttpRequest();
     xhrUpload.open('POST', API_BASE + '/ai_edit.php', true);
     xhrUpload.timeout = 120000;
+    xhrUpload.upload.onprogress = function(e) {
+        if (e.lengthComputable) {
+            var pct = Math.round(e.loaded / e.total * 100);
+            setLoading('正在上传图片... ' + pct + '%', '');
+        }
+    };
     xhrUpload.onload = function() {
         var raw = xhrUpload.responseText;
         debugLog('上传返回: ' + raw.substring(0,150));
