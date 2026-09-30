@@ -692,7 +692,9 @@ function showTabBar() {
 
 // 打开原生 AI 对话界面
 function openAIChat() {
+    debugLog('=== openAIChat 开始 ===', 'INFO');
     if (!window.Capacitor || !Capacitor.Plugins) {
+        debugLog('Capacitor 或 Plugins 不存在', 'ERROR');
         showToast('当前版本不支持 AI 对话');
         return;
     }
@@ -702,12 +704,31 @@ function openAIChat() {
         showToast('当前版本不支持 AI 对话');
         return;
     }
-    plugin.openChat().then(function(res) {
-        debugLog('AI 对话已打开', 'INFO');
-    }).catch(function(err) {
-        debugLog('打开 AI 对话失败: ' + err.message, 'ERROR');
-        showToast('打开 AI 对话失败: ' + err.message);
-    });
+    debugLog('找到插件: ' + (typeof plugin) + ', openChat类型: ' + (typeof plugin.openChat), 'INFO');
+    
+    // 检查 PluginHeaders
+    if (Capacitor.PluginHeaders) {
+        var header = Capacitor.PluginHeaders.find(function(p){return p.name==='AIChatPlugin';});
+        debugLog('PluginHeaders: ' + JSON.stringify(header), 'INFO');
+    } else {
+        debugLog('PluginHeaders 不存在', 'ERROR');
+    }
+    
+    try {
+        var result = plugin.openChat();
+        debugLog('openChat 返回: ' + (result ? 'Promise' : 'null/undefined'), 'INFO');
+        if (result && result.then) {
+            result.then(function(res) {
+                debugLog('AI 对话已打开: ' + JSON.stringify(res), 'SUCCESS');
+            }).catch(function(err) {
+                debugLog('打开 AI 对话失败(catch): ' + JSON.stringify(err) + ' message=' + err.message, 'ERROR');
+                showToast('打开失败: ' + err.message);
+            });
+        }
+    } catch(e) {
+        debugLog('openChat 抛出异常: ' + e.message + '\n' + e.stack, 'ERROR');
+        showToast('异常: ' + e.message);
+    }
 }
 async function submitEdit() {
     if (!selectedFile) { showToast('请先选择图片'); return; }
