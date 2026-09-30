@@ -41,7 +41,6 @@ class MyViewController: CAPBridgeViewController {
     override open func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         log("MyViewController viewDidAppear, bridge=\(String(describing: bridge))")
-        // 在 viewDidAppear 里注册插件，此时 bridge 和 webView 都已初始化
         registerPluginsIfNeeded()
     }
     
@@ -55,17 +54,7 @@ class MyViewController: CAPBridgeViewController {
         
         log("开始注册自定义插件...")
         
-        // 方式1: 注册插件类
-        bridge.registerPlugin(PhotoSaver.self)
-        log("✅ registerPlugin(PhotoSaver.self) 完成")
-        
-        bridge.registerPlugin(Notifier.self)
-        log("✅ registerPlugin(Notifier.self) 完成")
-        
-        bridge.registerPlugin(BackgroundAudio.self)
-        log("✅ registerPlugin(BackgroundAudio.self) 完成")
-        
-        // 方式2: 同时注册实例（双保险）
+        // 注册插件实例
         bridge.registerPluginInstance(PhotoSaver())
         log("✅ registerPluginInstance(PhotoSaver()) 完成")
         
