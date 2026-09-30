@@ -77,10 +77,9 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         // 注册 AI 对话插件（带错误捕获）
         do {
             let plugin = AIChatPlugin()
-            let pluginId = plugin.value(forKey: "id") as? String ?? "unknown"
-            log("🔍 AIChatPlugin 实例创建成功: \(type(of: plugin)), id=\(pluginId), className=\(NSStringFromClass(type(of: plugin)))")
+            log("🔍 AIChatPlugin 实例创建成功: \(type(of: plugin)), jsName=\(plugin.jsName), className=\(NSStringFromClass(type(of: plugin)))")
             bridge.registerPluginInstance(plugin)
-            log("✅ AIChatPlugin 已注册")
+            log("✅ AIChatPlugin 已注册, jsName=\(plugin.jsName)")
         } catch {
             log("❌ AIChatPlugin 注册失败: \(error.localizedDescription)")
         }
