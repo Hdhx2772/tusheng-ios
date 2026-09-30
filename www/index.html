@@ -953,14 +953,11 @@ function debugLog(msg, level) {
     debugLogs.push(entry);
     if (debugLogs.length > DEBUG_MAX_LINES) debugLogs.shift();
     
-    if (!DEBUG_MODE) return; // 只在调试模式开启时显示到界面
+    if (!DEBUG_MODE) return;
     var dbg = document.getElementById('debugBox');
-    if (!dbg) {
-        createDebugBox();
-        dbg = document.getElementById('debugBox');
-    }
+    if (!dbg || dbg.style.display === 'none') return;
     var contentEl = document.getElementById('debugContent');
-    if (contentEl) {
+    if (contentEl && contentEl.style.display !== 'none') {
         var line = document.createElement('div');
         line.style.cssText = 'margin-bottom:2px;word-break:break-all;';
         var timeSpan = document.createElement('span');
@@ -993,72 +990,16 @@ function escapeHtml(str) {
 
 function createDebugBox() {
     var dbg = document.getElementById('debugBox');
-    if (dbg) { dbg.style.display = 'block'; return; }
-    
-    dbg = document.createElement('div');
-    dbg.id = 'debugBox';
-    dbg.style.cssText = 'position:fixed;top:80px;left:10px;right:10px;z-index:2147483647;display:block;';
-    
-    // 标题栏 - touch-action:none 是关键，阻止浏览器默认行为
-    var header = document.createElement('div');
-    header.id = 'debugHeader';
-    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(30,30,40,0.97);border-bottom:1px solid rgba(255,255,255,0.15);touch-action:none;user-select:none;-webkit-user-select:none;';
-    
-    var title = document.createElement('span');
-    title.id = 'debugTitle';
-    title.style.cssText = 'color:#4fc3f7;font-weight:bold;font-size:12px;flex:1;';
-    title.textContent = '调试日志 (' + debugLogs.length + ')';
-    
-    var actions = document.createElement('div');
-    actions.style.cssText = 'display:flex;gap:6px;';
-    
-    // 按钮用 pointerup 触发，不依赖 click 事件
-    function makeBtn(text, clickHandler) {
-        var btn = document.createElement('div');
-        btn.className = 'debug-btn';
-        btn.textContent = text;
-        btn.style.cssText = 'padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;touch-action:manipulation;user-select:none;-webkit-user-select:none;';
-        var pressed = false;
-        btn.addEventListener('pointerdown', function(e) {
-            e.stopPropagation();
-            pressed = true;
-            btn.style.background = 'rgba(255,255,255,0.4)';
-        });
-        btn.addEventListener('pointerup', function(e) {
-            e.stopPropagation();
-            if (pressed) {
-                pressed = false;
-                btn.style.background = 'rgba(255,255,255,0.2)';
-                clickHandler();
-            }
-        });
-        btn.addEventListener('pointercancel', function() {
-            pressed = false;
-            btn.style.background = 'rgba(255,255,255,0.2)';
-        });
-        return btn;
+    if (dbg) {
+        dbg.style.display = 'block';
+        renderDebugLogs();
     }
-    
-    var copyBtn = makeBtn('复制', copyDebugLog);
-    var clearBtn = makeBtn('清空', clearDebugLog);
-    var minBtn = makeBtn('缩小', minimizeDebugBox);
-    minBtn.id = 'minBtn';
-    var closeBtn = makeBtn('关闭', closeDebugBox);
-    
-    actions.appendChild(copyBtn);
-    actions.appendChild(clearBtn);
-    actions.appendChild(minBtn);
-    actions.appendChild(closeBtn);
-    
-    header.appendChild(title);
-    header.appendChild(actions);
-    dbg.appendChild(header);
-    
-    // 内容区
-    var contentEl = document.createElement('div');
-    contentEl.id = 'debugContent';
-    contentEl.style.cssText = 'padding:8px 12px;max-height:250px;overflow-y:auto;background:rgba(20,20,30,0.97);font-size:11px;line-height:1.6;';
-    
+}
+
+function renderDebugLogs() {
+    var contentEl = document.getElementById('debugContent');
+    if (!contentEl) return;
+    contentEl.innerHTML = '';
     debugLogs.forEach(function(entry) {
         var line = document.createElement('div');
         line.style.cssText = 'margin-bottom:2px;word-break:break-all;';
@@ -1079,164 +1020,22 @@ function createDebugBox() {
         contentEl.appendChild(line);
     });
     contentEl.scrollTop = contentEl.scrollHeight;
-    
-    dbg.appendChild(contentEl);
-    document.body.appendChild(dbg);
-    
-    // 拖动功能 - 使用 pointer 事件（成熟项目标准方案）
-    var isDragging = false, startX, startY, startTop, startLeft;
-    
-    header.addEventListener('pointerdown', function(e) {
-        if (e.target.closest && e.target.closest('.debug-btn')) return;
-        isDragging = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        var rect = dbg.getBoundingClientRect();
-        startTop = rect.top;
-        startLeft = rect.left;
-        e.preventDefault();
-    });
-    
-    document.addEventListener('pointermove', function(e) {
-        if (!isDragging) return;
-        var dx = e.clientX - startX;
-        var dy = e.clientY - startY;
-        dbg.style.top = Math.max(0, startTop + dy) + 'px';
-        dbg.style.left = Math.max(0, startLeft + dx) + 'px';
-        dbg.style.right = 'auto';
-        e.preventDefault();
-    });
-    
-    document.addEventListener('pointerup', function() {
-        isDragging = false;
-    });
-    
-    document.addEventListener('pointercancel', function() {
-        isDragging = false;
-    });
+    var title = document.getElementById('debugTitle');
+    if (title) title.textContent = '调试日志 (' + debugLogs.length + ')';
 }
 
 function minimizeDebugBox() {
-    var dbg = document.getElementById('debugBox');
-    if (!dbg) return;
     var contentEl = document.getElementById('debugContent');
     var title = document.getElementById('debugTitle');
     var minBtn = document.getElementById('minBtn');
-    
-    if (contentEl) {
-        contentEl.remove();
-        title.textContent = '调试日志 (' + debugLogs.length + ') 条';
-        if (minBtn) minBtn.textContent = '展开';
-    } else {
-        contentEl = document.createElement('div');
-        contentEl.id = 'debugContent';
-        contentEl.style.cssText = 'padding:8px 12px;max-height:250px;overflow-y:auto;background:rgba(20,20,30,0.97);font-size:11px;line-height:1.6;';
-        
-        debugLogs.forEach(function(entry) {
-            var line = document.createElement('div');
-            line.style.cssText = 'margin-bottom:2px;word-break:break-all;';
-            var timeSpan = document.createElement('span');
-            timeSpan.style.cssText = 'color:#666;';
-            timeSpan.textContent = '[' + entry.time + ']';
-            var levelSpan = document.createElement('span');
-            levelSpan.style.cssText = 'color:#888;margin:0 4px;';
-            levelSpan.textContent = '[' + entry.level + ']';
-            var msgSpan = document.createElement('span');
-            if (entry.level === 'ERROR') msgSpan.style.color = '#ff6b6b';
-            else if (entry.level === 'SUCCESS') msgSpan.style.color = '#51cf66';
-            else msgSpan.style.color = '#ddd';
-            msgSpan.textContent = entry.msg;
-            line.appendChild(timeSpan);
-            line.appendChild(levelSpan);
-            line.appendChild(msgSpan);
-            contentEl.appendChild(line);
-        });
-        contentEl.scrollTop = contentEl.scrollHeight;
-        
-        dbg.appendChild(contentEl);
-        title.textContent = '调试日志 (' + debugLogs.length + ')';
-        if (minBtn) minBtn.textContent = '缩小';
-    }
-}
-
-function minimizeDebugBox() {
-    var dbg = document.getElementById('debugBox');
-    if (!dbg) return;
-    var contentEl = document.getElementById('debugContent');
-    var title = document.getElementById('debugTitle');
-    var minBtn = document.getElementById('minBtn');
-    
-    if (contentEl) {
-        // 缩小：直接移除内容区
-        contentEl.remove();
-        title.textContent = '调试日志 (' + debugLogs.length + ') 条';
-        if (minBtn) minBtn.textContent = '展开';
-    } else {
-        // 展开：重新创建内容区
-        contentEl = document.createElement('div');
-        contentEl.id = 'debugContent';
-        contentEl.style.cssText = 'padding:8px 12px;max-height:250px;overflow-y:auto;background:rgba(20,20,30,0.97);font-size:11px;line-height:1.6;';
-        
-        debugLogs.forEach(function(entry) {
-            var line = document.createElement('div');
-            line.style.cssText = 'margin-bottom:2px;word-break:break-all;';
-            var timeSpan = document.createElement('span');
-            timeSpan.style.cssText = 'color:#666;';
-            timeSpan.textContent = '[' + entry.time + ']';
-            var levelSpan = document.createElement('span');
-            levelSpan.style.cssText = 'color:#888;margin:0 4px;';
-            levelSpan.textContent = '[' + entry.level + ']';
-            var msgSpan = document.createElement('span');
-            if (entry.level === 'ERROR') msgSpan.style.color = '#ff6b6b';
-            else if (entry.level === 'SUCCESS') msgSpan.style.color = '#51cf66';
-            else msgSpan.style.color = '#ddd';
-            msgSpan.textContent = entry.msg;
-            line.appendChild(timeSpan);
-            line.appendChild(levelSpan);
-            line.appendChild(msgSpan);
-            contentEl.appendChild(line);
-        });
-        contentEl.scrollTop = contentEl.scrollHeight;
-        
-        dbg.appendChild(contentEl);
-        title.textContent = '调试日志 (' + debugLogs.length + ')';
-        if (minBtn) minBtn.textContent = '缩小';
-    }
-}
-
-function minimizeDebugBox() {
-    var dbg = document.getElementById('debugBox');
-    if (!dbg) return;
-    var content = dbg.querySelector('.debug-content');
-    var title = dbg.querySelector('.debug-title');
-    var minBtn = document.getElementById('minBtn');
-    var isMinimized = content.style.display === 'none';
-    if (isMinimized) {
-        // 展开：重新渲染日志
-        content.style.display = 'block';
-        content.style.visibility = 'visible';
-        content.style.height = '';
-        content.style.overflow = '';
-        content.innerHTML = '';
-        debugLogs.forEach(function(entry) {
-            var line = document.createElement('div');
-            line.className = 'log-line log-' + entry.level;
-            line.innerHTML = '<span class="log-time">[' + entry.time + ']</span>' + 
-                             '<span style="color:#888;margin-right:4px">[' + entry.level + ']</span>' + 
-                             escapeHtml(entry.msg);
-            content.appendChild(line);
-        });
-        content.scrollTop = content.scrollHeight;
-        title.textContent = '调试日志 (' + debugLogs.length + ')';
+    if (!contentEl) return;
+    if (contentEl.style.display === 'none') {
+        contentEl.style.display = 'block';
+        renderDebugLogs();
         if (minBtn) minBtn.textContent = '缩小';
     } else {
-        // 缩小：完全隐藏内容区，只保留标题栏
-        content.style.display = 'none';
-        content.style.visibility = 'hidden';
-        content.style.height = '0px';
-        content.style.overflow = 'hidden';
-        content.innerHTML = '';
-        title.textContent = '调试日志 (' + debugLogs.length + ') 条';
+        contentEl.style.display = 'none';
+        if (title) title.textContent = '调试日志 (' + debugLogs.length + ') 条';
         if (minBtn) minBtn.textContent = '展开';
     }
 }
@@ -1357,6 +1156,36 @@ document.addEventListener('DOMContentLoaded', function() {
         Capacitor.Plugins.Notifier.requestPermission().catch(function() {});
     }
     
+    // 调试框拖动功能（操作静态HTML元素）
+    (function() {
+        var header = document.getElementById('debugHeader');
+        if (!header) return;
+        var isDragging = false, startX, startY, startTop, startLeft;
+        header.addEventListener('pointerdown', function(e) {
+            if (e.target.closest && e.target.closest('.debug-btn')) return;
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            var dbg = document.getElementById('debugBox');
+            var rect = dbg.getBoundingClientRect();
+            startTop = rect.top;
+            startLeft = rect.left;
+            e.preventDefault();
+        });
+        document.addEventListener('pointermove', function(e) {
+            if (!isDragging) return;
+            var dx = e.clientX - startX;
+            var dy = e.clientY - startY;
+            var dbg = document.getElementById('debugBox');
+            dbg.style.top = Math.max(0, startTop + dy) + 'px';
+            dbg.style.left = Math.max(0, startLeft + dx) + 'px';
+            dbg.style.right = 'auto';
+            e.preventDefault();
+        });
+        document.addEventListener('pointerup', function() { isDragging = false; });
+        document.addEventListener('pointercancel', function() { isDragging = false; });
+    })();
+
     // 点击"换背景"10次触发调试模式
     var presetChips = document.querySelectorAll('.chip');
     var bgClickCount = 0;
@@ -1375,7 +1204,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         createDebugBox();
                     } else {
                         var dbg = document.getElementById('debugBox');
-                        if (dbg) dbg.remove();
+                        if (dbg) dbg.style.display = 'none';
                     }
                 }
             });
@@ -1851,6 +1680,20 @@ function showUpdateModal(url) {
 </script>
 
 
+
+<!-- 调试框 - 预先写死结构，内联onclick绑定，避免动态创建的事件问题 -->
+<div id="debugBox" style="display:none;position:fixed;top:80px;left:10px;right:10px;z-index:2147483647;">
+    <div id="debugHeader" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(30,30,40,0.97);border-bottom:1px solid rgba(255,255,255,0.15);touch-action:none;user-select:none;-webkit-user-select:none;">
+        <span id="debugTitle" style="color:#4fc3f7;font-weight:bold;font-size:12px;flex:1;">调试日志 (0)</span>
+        <div style="display:flex;gap:6px;">
+            <div class="debug-btn" onclick="copyDebugLog()" style="padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;touch-action:manipulation;cursor:pointer;">复制</div>
+            <div class="debug-btn" onclick="clearDebugLog()" style="padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;touch-action:manipulation;cursor:pointer;">清空</div>
+            <div id="minBtn" class="debug-btn" onclick="minimizeDebugBox()" style="padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;touch-action:manipulation;cursor:pointer;">缩小</div>
+            <div class="debug-btn" onclick="closeDebugBox()" style="padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;touch-action:manipulation;cursor:pointer;">关闭</div>
+        </div>
+    </div>
+    <div id="debugContent" style="padding:8px 12px;max-height:250px;overflow-y:auto;background:rgba(20,20,30,0.97);font-size:11px;line-height:1.6;"></div>
+</div>
 
 </body>
 </html>
