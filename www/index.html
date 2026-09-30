@@ -997,12 +997,12 @@ function createDebugBox() {
     
     dbg = document.createElement('div');
     dbg.id = 'debugBox';
-    dbg.style.cssText = 'position:fixed;top:80px;left:10px;right:10px;z-index:9999999;display:block;pointer-events:auto;';
+    dbg.style.cssText = 'position:fixed;top:80px;left:10px;right:10px;z-index:2147483647;display:block;';
     
-    // 标题栏
+    // 标题栏 - touch-action:none 是关键，阻止浏览器默认行为
     var header = document.createElement('div');
     header.id = 'debugHeader';
-    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(30,30,40,0.97);border-bottom:1px solid rgba(255,255,255,0.15);user-select:none;-webkit-user-select:none;touch-action:manipulation;';
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(30,30,40,0.97);border-bottom:1px solid rgba(255,255,255,0.15);touch-action:none;user-select:none;-webkit-user-select:none;';
     
     var title = document.createElement('span');
     title.id = 'debugTitle';
@@ -1012,15 +1012,30 @@ function createDebugBox() {
     var actions = document.createElement('div');
     actions.style.cssText = 'display:flex;gap:6px;';
     
+    // 按钮用 pointerup 触发，不依赖 click 事件
     function makeBtn(text, clickHandler) {
         var btn = document.createElement('div');
         btn.className = 'debug-btn';
         btn.textContent = text;
-        btn.style.cssText = 'padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;cursor:pointer;user-select:none;-webkit-user-select:none;flex-shrink:0;';
-        btn.onclick = function(e) {
+        btn.style.cssText = 'padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;touch-action:manipulation;user-select:none;-webkit-user-select:none;';
+        var pressed = false;
+        btn.addEventListener('pointerdown', function(e) {
             e.stopPropagation();
-            clickHandler();
-        };
+            pressed = true;
+            btn.style.background = 'rgba(255,255,255,0.4)';
+        });
+        btn.addEventListener('pointerup', function(e) {
+            e.stopPropagation();
+            if (pressed) {
+                pressed = false;
+                btn.style.background = 'rgba(255,255,255,0.2)';
+                clickHandler();
+            }
+        });
+        btn.addEventListener('pointercancel', function() {
+            pressed = false;
+            btn.style.background = 'rgba(255,255,255,0.2)';
+        });
         return btn;
     }
     
@@ -1068,37 +1083,10 @@ function createDebugBox() {
     dbg.appendChild(contentEl);
     document.body.appendChild(dbg);
     
-    // 拖动功能
+    // 拖动功能 - 使用 pointer 事件（成熟项目标准方案）
     var isDragging = false, startX, startY, startTop, startLeft;
     
-    header.addEventListener('touchstart', function(e) {
-        if (e.target.closest && e.target.closest('.debug-btn')) return;
-        isDragging = true;
-        var touch = e.touches[0];
-        startX = touch.clientX;
-        startY = touch.clientY;
-        var rect = dbg.getBoundingClientRect();
-        startTop = rect.top;
-        startLeft = rect.left;
-    }, {passive: false});
-    
-    header.addEventListener('touchmove', function(e) {
-        if (!isDragging) return;
-        e.preventDefault();
-        var touch = e.touches[0];
-        var dx = touch.clientX - startX;
-        var dy = touch.clientY - startY;
-        dbg.style.top = Math.max(0, startTop + dy) + 'px';
-        dbg.style.left = Math.max(0, startLeft + dx) + 'px';
-        dbg.style.right = 'auto';
-    }, {passive: false});
-    
-    header.addEventListener('touchend', function() {
-        isDragging = false;
-    });
-    
-    // 鼠标拖动
-    header.addEventListener('mousedown', function(e) {
+    header.addEventListener('pointerdown', function(e) {
         if (e.target.closest && e.target.closest('.debug-btn')) return;
         isDragging = true;
         startX = e.clientX;
@@ -1108,17 +1096,67 @@ function createDebugBox() {
         startLeft = rect.left;
         e.preventDefault();
     });
-    document.addEventListener('mousemove', function(e) {
+    
+    document.addEventListener('pointermove', function(e) {
         if (!isDragging) return;
         var dx = e.clientX - startX;
         var dy = e.clientY - startY;
         dbg.style.top = Math.max(0, startTop + dy) + 'px';
         dbg.style.left = Math.max(0, startLeft + dx) + 'px';
         dbg.style.right = 'auto';
+        e.preventDefault();
     });
-    document.addEventListener('mouseup', function() {
+    
+    document.addEventListener('pointerup', function() {
         isDragging = false;
     });
+    
+    document.addEventListener('pointercancel', function() {
+        isDragging = false;
+    });
+}
+
+function minimizeDebugBox() {
+    var dbg = document.getElementById('debugBox');
+    if (!dbg) return;
+    var contentEl = document.getElementById('debugContent');
+    var title = document.getElementById('debugTitle');
+    var minBtn = document.getElementById('minBtn');
+    
+    if (contentEl) {
+        contentEl.remove();
+        title.textContent = '调试日志 (' + debugLogs.length + ') 条';
+        if (minBtn) minBtn.textContent = '展开';
+    } else {
+        contentEl = document.createElement('div');
+        contentEl.id = 'debugContent';
+        contentEl.style.cssText = 'padding:8px 12px;max-height:250px;overflow-y:auto;background:rgba(20,20,30,0.97);font-size:11px;line-height:1.6;';
+        
+        debugLogs.forEach(function(entry) {
+            var line = document.createElement('div');
+            line.style.cssText = 'margin-bottom:2px;word-break:break-all;';
+            var timeSpan = document.createElement('span');
+            timeSpan.style.cssText = 'color:#666;';
+            timeSpan.textContent = '[' + entry.time + ']';
+            var levelSpan = document.createElement('span');
+            levelSpan.style.cssText = 'color:#888;margin:0 4px;';
+            levelSpan.textContent = '[' + entry.level + ']';
+            var msgSpan = document.createElement('span');
+            if (entry.level === 'ERROR') msgSpan.style.color = '#ff6b6b';
+            else if (entry.level === 'SUCCESS') msgSpan.style.color = '#51cf66';
+            else msgSpan.style.color = '#ddd';
+            msgSpan.textContent = entry.msg;
+            line.appendChild(timeSpan);
+            line.appendChild(levelSpan);
+            line.appendChild(msgSpan);
+            contentEl.appendChild(line);
+        });
+        contentEl.scrollTop = contentEl.scrollHeight;
+        
+        dbg.appendChild(contentEl);
+        title.textContent = '调试日志 (' + debugLogs.length + ')';
+        if (minBtn) minBtn.textContent = '缩小';
+    }
 }
 
 function minimizeDebugBox() {
