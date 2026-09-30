@@ -710,6 +710,14 @@ function doGenerate(prompt) {
             if (!currentTaskId) { isGenerating = false; showToast('失败：未获取到任务ID', 3000); resetUI(); return; }
             setLoading('AI 正在处理...', '');
             pollCount = 0;
+            // 启动原生后台轮询（即使 App 在后台也能继续轮询并发通知）
+            if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.BackgroundAudio) {
+                var pollUrl = API_BASE + '/ai_edit.php?action=status&taskId=' + encodeURIComponent(currentTaskId);
+                debugLog('启动原生后台轮询: ' + pollUrl, 'INFO');
+                Capacitor.Plugins.BackgroundAudio.startPolling({ pollUrl: pollUrl }).catch(function(e) {
+                    debugLog('原生轮询启动失败: ' + JSON.stringify(e), 'ERROR');
+                });
+            }
             pollTaskStatus();
         } catch(e) {
             isGenerating = false;
@@ -778,7 +786,16 @@ function pollTaskStatus() {
                 showResult(resultUrl);
                 return;
             }
-            if (sData.status === 'failed') { isGenerating = false; showToast('失败：' + (sData.error || '生成失败'), 3000); resetUI(); return; }
+            if (sData.status === 'failed') {
+                isGenerating = false;
+                // 停止原生后台轮询
+                if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.BackgroundAudio) {
+                    Capacitor.Plugins.BackgroundAudio.stopPolling().catch(function() {});
+                }
+                showToast('失败：' + (sData.error || '生成失败'), 3000);
+                resetUI();
+                return;
+            }
             if (sData.error) { isGenerating = false; showToast('失败：' + sData.error, 3000); resetUI(); return; }
             if (pollCount >= 120) { isGenerating = false; showToast('生成超时，请稍后重试', 3000); resetUI(); return; }
             setTimeout(pollTaskStatus, 1500);
@@ -1131,6 +1148,11 @@ var resultShown = false;
 function showResult(url) {
     if (resultShown) { try { debugLog('showResult被重复调用，忽略', 'WARN'); } catch(e){} return; }
     resultShown = true;
+    // 停止原生后台轮询
+    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.BackgroundAudio) {
+        Capacitor.Plugins.BackgroundAudio.stopPolling().catch(function() {});
+        debugLog('已停止原生后台轮询', 'INFO');
+    }
     stopBackgroundAudio();
     resultImageUrl = url;
     lastPrompt = document.getElementById('promptInput').value.trim();

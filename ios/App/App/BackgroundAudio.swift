@@ -1,6 +1,7 @@
 import Foundation
 import Capacitor
 import AVFoundation
+import UserNotifications
 
 @objc(BackgroundAudio)
 public class BackgroundAudio: CAPPlugin, CAPBridgedPlugin {
@@ -8,10 +9,15 @@ public class BackgroundAudio: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "BackgroundAudio"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "startPolling", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopPolling", returnType: CAPPluginReturnPromise)
     ]
     
     private var audioPlayer: AVAudioPlayer?
+    private var pollingTask: URLSessionDataTask?
+    private var isPolling = false
+    private var pollCount = 0
     
     @objc func start(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
@@ -45,6 +51,7 @@ public class BackgroundAudio: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.main.async {
             self.audioPlayer?.stop()
             self.audioPlayer = nil
+            self.stopPollingInternal()
             do {
                 try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             } catch {
@@ -52,6 +59,123 @@ public class BackgroundAudio: CAPPlugin, CAPBridgedPlugin {
             }
             print("✅ 后台音频保活已停止")
             call.resolve(["ok": true])
+        }
+    }
+    
+    // 开始原生后台轮询
+    @objc func startPolling(_ call: CAPPluginCall) {
+        guard let pollUrl = call.getString("pollUrl") else {
+            call.reject("pollUrl is required")
+            return
+        }
+        
+        isPolling = true
+        pollCount = 0
+        print("🔄 开始原生后台轮询: \(pollUrl)")
+        
+        // 立即开始第一次轮询
+        pollOnce(url: pollUrl)
+        
+        call.resolve(["ok": true])
+    }
+    
+    // 停止原生后台轮询
+    @objc func stopPolling(_ call: CAPPluginCall) {
+        stopPollingInternal()
+        call.resolve(["ok": true])
+    }
+    
+    private func stopPollingInternal() {
+        isPolling = false
+        pollingTask?.cancel()
+        pollingTask = nil
+        print("⏹️ 原生后台轮询已停止")
+    }
+    
+    // 单次轮询
+    private func pollOnce(url: String) {
+        guard isPolling else { return }
+        guard let url = URL(string: url) else { return }
+        
+        pollCount += 1
+        print("🔄 原生轮询第\(pollCount)次")
+        
+        let task = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            guard let self = self else { return }
+            guard self.isPolling else { return }
+            
+            if let error = error {
+                print("❌ 原生轮询失败: \(error.localizedDescription)")
+                // 失败后继续轮询
+                self.scheduleNextPoll(url: url.absoluteString)
+                return
+            }
+            
+            guard let data = data, let raw = String(data: data, encoding: .utf8) else {
+                self.scheduleNextPoll(url: url.absoluteString)
+                return
+            }
+            
+            print("📥 原生轮询返回: \(raw.prefix(100))")
+            
+            // 解析 JSON
+            if let jsonData = raw.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+               let status = json["status"] as? String {
+                
+                if status == "completed" {
+                    // 生成完成，发送通知
+                    print("✅ 原生轮询检测到生成完成！")
+                    self.sendNotification(title: "图生万物", body: "图片生成已完成，点击查看")
+                    self.stopPollingInternal()
+                    return
+                } else if status == "failed" {
+                    // 生成失败
+                    print("❌ 原生轮询检测到生成失败")
+                    self.sendNotification(title: "图生万物", body: "图片生成失败，请重试")
+                    self.stopPollingInternal()
+                    return
+                }
+            }
+            
+            // 继续轮询
+            if self.pollCount >= 120 {
+                print("⚠️ 原生轮询超时（120次）")
+                self.stopPollingInternal()
+                return
+            }
+            
+            self.scheduleNextPoll(url: url.absoluteString)
+        }
+        
+        pollingTask = task
+        task.resume()
+    }
+    
+    // 安排下一次轮询（2秒后）
+    private func scheduleNextPoll(url: String) {
+        guard isPolling else { return }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.pollOnce(url: url)
+        }
+    }
+    
+    // 发送本地通知
+    private func sendNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("❌ 通知发送失败: \(error.localizedDescription)")
+            } else {
+                print("✅ 通知发送成功: \(title) - \(body)")
+            }
         }
     }
 }
