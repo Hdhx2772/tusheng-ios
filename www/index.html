@@ -907,7 +907,7 @@ window.addEventListener('pageshow', function() {
     setTimeout(checkTaskOnResume, 500);
 });
 
-var DEBUG_MODE = localStorage.getItem('debug_mode') === '1';
+var DEBUG_MODE = false; // 每次进入App默认关闭，点击换背景10次才开启
 
 function setLoading(t, s) {
     document.getElementById('loadingText').textContent = t;
@@ -1212,7 +1212,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (bgClickCount >= 10) {
                     bgClickCount = 0;
                     DEBUG_MODE = !DEBUG_MODE;
-                    localStorage.setItem('debug_mode', DEBUG_MODE ? '1' : '0');
                     showToast(DEBUG_MODE ? '调试模式已开启' : '调试模式已关闭');
                     if (!DEBUG_MODE) {
                         var dbg = document.getElementById('debugBox');
