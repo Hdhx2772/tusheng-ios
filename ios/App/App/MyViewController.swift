@@ -85,33 +85,9 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         }
         
         log("✅ 所有自定义插件注册完成")
-        
-        // 在 JS 端手动注册 AIChatPlugin（需要先添加 PluginHeaders 声明原生方法，再 registerPlugin）
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.bridge?.webView?.evaluateJavaScript("""
-            (function() {
-                try {
-                    if (!window.Capacitor) return;
-                    // 1. 先添加 PluginHeaders，声明原生方法列表（openChat 返回 promise）
-                    if (!Capacitor.PluginHeaders) Capacitor.PluginHeaders = [];
-                    if (!Capacitor.PluginHeaders.find(function(p){return p.name==='AIChatPlugin';})) {
-                        Capacitor.PluginHeaders.push({
-                            name: 'AIChatPlugin',
-                            methods: [{ name: 'openChat', rtype: 'promise' }]
-                        });
-                    }
-                    // 2. 再注册插件代理
-                    if (Capacitor.registerPlugin && !Capacitor.Plugins.AIChatPlugin) {
-                        Capacitor.registerPlugin('AIChatPlugin');
-                        console.log('JS端手动注册 AIChatPlugin 成功');
-                    }
-                } catch(e) {
-                    console.log('JS端注册 AIChatPlugin 失败: ' + e.message);
-                }
-            })()
-            """)
-        }
-        
+
+        // 插件遵循 CAPBridgedPlugin 协议后，JSExport.exportJS 会在页面加载时自动注入 JS 代理，
+        // 无需手动 evaluateJavaScript 注册。延迟检查注入结果。
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             self?.checkPluginsInJS()
         }
@@ -122,10 +98,9 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         let js = """
         (function() {
             var plugins = Object.keys(Capacitor.Plugins).join(', ');
-            var hasPhotoSaver = !!Capacitor.Plugins.PhotoSaver;
-            var hasNotifier = !!Capacitor.Plugins.Notifier;
-            var hasBackgroundAudio = !!Capacitor.Plugins.BackgroundAudio;
-            return 'JS插件列表: ' + plugins + ' | PhotoSaver=' + hasPhotoSaver + ' Notifier=' + hasNotifier + ' BackgroundAudio=' + hasBackgroundAudio;
+            var ai = Capacitor.Plugins.AIChatPlugin;
+            var aiInfo = ai ? ('AIChatPlugin存在, openChat=' + (typeof ai.openChat)) : 'AIChatPlugin不存在';
+            return 'JS插件列表: ' + plugins + ' | ' + aiInfo;
         })()
         """
         webView.evaluateJavaScript(js) { [weak self] result, error in
