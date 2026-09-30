@@ -1130,6 +1130,19 @@ function showResult(url) {
     resultImageUrl = url;
     lastPrompt = document.getElementById('promptInput').value.trim();
     
+    // 生成完成立即发送通知（不管图片有没有加载完成）
+    if (document.hidden && window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Notifier) {
+        debugLog('App在后台，发送生成完成通知', 'INFO');
+        Capacitor.Plugins.Notifier.sendNotification({
+            title: '图生万物',
+            body: '图片生成已完成，点击查看'
+        }).then(function() {
+            debugLog('通知发送成功', 'SUCCESS');
+        }).catch(function(e) {
+            debugLog('通知发送失败: ' + JSON.stringify(e), 'ERROR');
+        });
+    }
+    
     // 在生成中页面就把图片渲染好，然后直接显示结果页
     setLoading('正在加载结果...', '');
     
@@ -1148,14 +1161,6 @@ function showResult(url) {
         // 图片渲染完成，显示结果页
         document.getElementById('loadingCard').classList.remove('show');
         document.getElementById('resultCard').classList.add('show');
-        
-        // 如果 App 在后台，发送本地通知
-        if (document.hidden && window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Notifier) {
-            Capacitor.Plugins.Notifier.sendNotification({
-                title: '图生万物',
-                body: '图片生成已完成，点击查看'
-            }).catch(function() {});
-        }
         
         // 初始化滑块位置
         document.getElementById('resultBeforeWrap').style.width = '50%';
