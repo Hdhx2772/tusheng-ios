@@ -882,18 +882,7 @@ var DEBUG_MODE = false; // 每次进入App默认关闭，点击换背景10次才
 function setLoading(t, s) {
     document.getElementById('loadingText').textContent = t;
     document.getElementById('loadingSub').textContent = s;
-    if (DEBUG_MODE) {
-        var dbg = document.getElementById('debugBox');
-        if (!dbg) {
-            dbg = document.createElement('div');
-            dbg.id = 'debugBox';
-            dbg.style.cssText = 'position:fixed;bottom:60px;left:10px;right:10px;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;padding:8px;border-radius:8px;font-size:11px;font-family:monospace;max-height:120px;overflow-y:auto;';
-            document.body.appendChild(dbg);
-        }
-        var time = new Date().toLocaleTimeString();
-        dbg.innerHTML += '<br>[' + time + '] ' + t + (s ? ' (' + s + ')' : '');
-        dbg.scrollTop = dbg.scrollHeight;
-    }
+    debugLog(t + (s ? ' (' + s + ')' : ''), 'INFO');
 }
 
 // 接收原生日志
