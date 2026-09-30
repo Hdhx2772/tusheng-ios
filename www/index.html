@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -255,7 +255,7 @@ body {
 
 <!-- 创作页 -->
 <div class="content" id="pageCreate">
-    <div class="card upload-card" id="uploadCard" onclick="selectImage()">
+    <div class="card upload-card" id="uploadCard" style="position:relative;">
         <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
         </svg>
@@ -491,10 +491,20 @@ function getDeviceCode() {
 
 var fileInput = document.getElementById('fileInput');
 fileInput.addEventListener('change', function(e) {
-    if (e.target.files.length > 0) handleFile(e.target.files[0]);
+    debugLog('fileInput change 触发，文件数: ' + (e.target.files ? e.target.files.length : 0), 'INFO');
+    if (e.target.files && e.target.files.length > 0) {
+        var f = e.target.files[0];
+        debugLog('选中文件: ' + f.name + ' (' + (f.size/1024).toFixed(0) + 'KB, ' + f.type + ')', 'INFO');
+        handleFile(f);
+    } else {
+        debugLog('fileInput change 但没有文件', 'WARN');
+    }
 });
 
-function selectImage() { fileInput.click(); }
+function selectImage() {
+    debugLog('selectImage 被调用，触发 fileInput.click()', 'INFO');
+    fileInput.click();
+}
 
 // 读取 EXIF 方向
 function getExifOrientation(file, callback) {
@@ -596,23 +606,33 @@ function compressImage(file, maxSize, quality, callback) {
 }
 
 function handleFile(file) {
+    debugLog('handleFile 开始: ' + file.name + ' (' + (file.size/1024).toFixed(0) + 'KB, ' + file.type + ')', 'INFO');
     var allowed = ['image/jpeg','image/png','image/webp'];
-    if (allowed.indexOf(file.type) === -1) { showToast('只支持 JPG、PNG、WebP'); return; }
-    if (file.size > 10*1024*1024) { showToast('图片不能超过 10MB'); return; }
+    if (allowed.indexOf(file.type) === -1) { showToast('只支持 JPG、PNG、WebP'); debugLog('文件类型不支持: ' + file.type, 'ERROR'); return; }
+    if (file.size > 10*1024*1024) { showToast('图片不能超过 10MB'); debugLog('文件过大: ' + (file.size/1024/1024).toFixed(2) + 'MB', 'ERROR'); return; }
     showToast('正在处理图片...', 800);
-    fixImageOrientation(file, function(fixedFile) {
-        compressImage(fixedFile, 2048, 0.85, function(compressedFile) {
-            selectedFile = compressedFile;
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                originalImageData = e.target.result;
-                document.getElementById('previewImg').src = e.target.result;
-                document.getElementById('uploadCard').style.display = 'none';
-                document.getElementById('previewCard').classList.add('show');
-            };
-            reader.readAsDataURL(compressedFile);
+    try {
+        fixImageOrientation(file, function(fixedFile) {
+            debugLog('fixImageOrientation 完成', 'INFO');
+            compressImage(fixedFile, 2048, 0.85, function(compressedFile) {
+                debugLog('compressImage 完成: ' + (compressedFile.size/1024).toFixed(0) + 'KB', 'INFO');
+                selectedFile = compressedFile;
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    originalImageData = e.target.result;
+                    document.getElementById('previewImg').src = e.target.result;
+                    document.getElementById('uploadCard').style.display = 'none';
+                    document.getElementById('previewCard').classList.add('show');
+                    debugLog('图片预览显示成功', 'SUCCESS');
+                };
+                reader.onerror = function() { debugLog('FileReader 读取失败', 'ERROR'); showToast('图片读取失败'); };
+                reader.readAsDataURL(compressedFile);
+            });
         });
-    });
+    } catch(err) {
+        debugLog('handleFile 异常: ' + err.message, 'ERROR');
+        showToast('图片处理失败: ' + err.message);
+    }
 }
 
 function removeImage() {
