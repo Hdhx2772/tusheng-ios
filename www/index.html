@@ -1157,34 +1157,34 @@ document.addEventListener('DOMContentLoaded', function() {
         Capacitor.Plugins.Notifier.requestPermission().catch(function() {});
     }
     
-    // 调试框拖动功能（操作静态HTML元素）
+    // 调试框拖动功能 - 使用 setPointerCapture，事件绑定到 header 本身
     (function() {
         var header = document.getElementById('debugHeader');
-        if (!header) return;
-        var isDragging = false, startX, startY, startTop, startLeft;
+        var dbg = document.getElementById('debugBox');
+        if (!header || !dbg) return;
+        var isDragging = false, startX, startY, startTop, startLeft, fixedWidth;
         header.addEventListener('pointerdown', function(e) {
             if (e.target.closest && e.target.closest('.debug-btn')) return;
             e.stopPropagation();
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
-            var dbg = document.getElementById('debugBox');
             var rect = dbg.getBoundingClientRect();
             startTop = rect.top;
             startLeft = rect.left;
-            dbg.dataset.fixedWidth = rect.width + 'px';
-            dbg.style.width = rect.width + 'px';
+            fixedWidth = rect.width;
+            dbg.style.width = fixedWidth + 'px';
             dbg.style.right = 'auto';
+            try { header.setPointerCapture(e.pointerId); } catch(err) {}
             e.preventDefault();
         });
-        document.addEventListener('pointermove', function(e) {
+        header.addEventListener('pointermove', function(e) {
             if (!isDragging) return;
             var dx = e.clientX - startX;
             var dy = e.clientY - startY;
-            var dbg = document.getElementById('debugBox');
             var newLeft = startLeft + dx;
             var newTop = startTop + dy;
-            var maxLeft = window.innerWidth - parseInt(dbg.dataset.fixedWidth);
+            var maxLeft = window.innerWidth - fixedWidth;
             if (newLeft < 0) newLeft = 0;
             if (newLeft > maxLeft) newLeft = maxLeft;
             if (newTop < 0) newTop = 0;
@@ -1192,8 +1192,11 @@ document.addEventListener('DOMContentLoaded', function() {
             dbg.style.left = newLeft + 'px';
             e.preventDefault();
         });
-        document.addEventListener('pointerup', function() { isDragging = false; });
-        document.addEventListener('pointercancel', function() { isDragging = false; });
+        header.addEventListener('pointerup', function(e) {
+            isDragging = false;
+            try { header.releasePointerCapture(e.pointerId); } catch(err) {}
+        });
+        header.addEventListener('pointercancel', function() { isDragging = false; });
     })();
 
     // 点击"换背景"10次触发调试模式
