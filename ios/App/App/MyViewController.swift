@@ -86,7 +86,23 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         
         log("✅ 所有自定义插件注册完成")
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+        // 在 JS 端手动注册 AIChatPlugin 代理（Capacitor 需要显式 registerPlugin 才会出现在 Capacitor.Plugins 中）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.bridge?.webView?.evaluateJavaScript("""
+            (function() {
+                try {
+                    if (window.Capacitor && Capacitor.registerPlugin && !Capacitor.Plugins.AIChatPlugin) {
+                        Capacitor.registerPlugin('AIChatPlugin');
+                        console.log('JS端手动注册 AIChatPlugin 成功');
+                    }
+                } catch(e) {
+                    console.log('JS端注册 AIChatPlugin 失败: ' + e.message);
+                }
+            })()
+            """)
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             self?.checkPluginsInJS()
         }
     }
