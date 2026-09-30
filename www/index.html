@@ -1013,16 +1013,37 @@ function createDebugBox() {
     actions.style.cssText = 'display:flex;gap:6px;';
     
     function makeBtn(text, clickHandler) {
-        var btn = document.createElement('button');
+        var btn = document.createElement('div');
         btn.textContent = text;
-        btn.style.cssText = 'padding:4px 10px;font-size:11px;border-radius:5px;background:rgba(255,255,255,0.15);color:#fff;border:none;cursor:pointer;touch-action:auto;position:relative;z-index:10;';
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            clickHandler();
-        });
+        btn.style.cssText = 'padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;';
+        var touched = false;
         btn.addEventListener('touchstart', function(e) {
             e.stopPropagation();
+            touched = true;
+            btn.style.background = 'rgba(255,255,255,0.35)';
         }, {passive: true});
+        btn.addEventListener('touchend', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            btn.style.background = 'rgba(255,255,255,0.2)';
+            if (touched) {
+                touched = false;
+                clickHandler();
+            }
+        }, {passive: false});
+        btn.addEventListener('touchcancel', function() {
+            touched = false;
+            btn.style.background = 'rgba(255,255,255,0.2)';
+        });
+        btn.addEventListener('mousedown', function(e) {
+            e.stopPropagation();
+            btn.style.background = 'rgba(255,255,255,0.35)';
+        });
+        btn.addEventListener('mouseup', function(e) {
+            e.stopPropagation();
+            btn.style.background = 'rgba(255,255,255,0.2)';
+            clickHandler();
+        });
         return btn;
     }
     
@@ -1074,7 +1095,7 @@ function createDebugBox() {
     var isDragging = false, startX, startY, startTop, startLeft;
     
     header.addEventListener('touchstart', function(e) {
-        if (e.target.tagName === 'BUTTON') return;
+        if (e.target.closest && e.target.closest('[style*="cursor:pointer"]')) return;
         isDragging = true;
         var touch = e.touches[0];
         startX = touch.clientX;
@@ -1101,7 +1122,7 @@ function createDebugBox() {
     
     // 鼠标拖动
     header.addEventListener('mousedown', function(e) {
-        if (e.target.tagName === 'BUTTON') return;
+        if (e.target.closest && e.target.closest('[style*="cursor:pointer"]')) return;
         isDragging = true;
         startX = e.clientX;
         startY = e.clientY;
