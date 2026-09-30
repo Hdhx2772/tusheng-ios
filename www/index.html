@@ -736,6 +736,7 @@ async function doGenerate(prompt) {
     isGenerating = true;
     historySaved = false;
     var fd = new FormData();
+    fd.append('action', 'upload');
     fd.append('image', selectedFile);
     fd.append('prompt', prompt);
     debugLog('开始上传图片...');
@@ -813,7 +814,7 @@ async function pollTaskStatus() {
                         recXhr.open('POST', API_BASE + '/api_ai_record.php', true);
                         recXhr.timeout = 15000;
                         (async function() {
-                            await addSigToXhr(recXhr, { action: 'upload', device_id: getDeviceCode(), image_url: resultImageUrl });
+                            await addSigToXhr(recXhr, { action: 'upload', device_id: getDeviceCode(), prompt: currentPrompt, image_url: resultImageUrl });
                         })();
                         var recFd = new FormData();
                         recFd.append('action', 'upload');
