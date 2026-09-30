@@ -779,34 +779,35 @@ async function pollTaskStatus() {
                     localStorage.setItem('edit_history', JSON.stringify(hist.slice(0,50)));
                     
                     // 上传记录到服务器（包含原图）
-                    try {
-                        var recXhr = new XMLHttpRequest();
-                        recXhr.open('POST', API_BASE + '/api_ai_record.php', true);
-                        recXhr.timeout = 15000;
-                        (async function() {
-                            await addSigToXhr(recXhr, { action: 'upload', device_id: getDeviceCode(), prompt: currentPrompt, image_url: resultImageUrl });
-                        })();
-                        var recFd = new FormData();
-                        recFd.append('action', 'upload');
-                        recFd.append('device_id', getDeviceCode());
-                        recFd.append('prompt', currentPrompt);
-                        recFd.append('image_url', resultUrl);
-                        // 上传原图（从 base64 转成 blob）
-                        if (originalImageData) {
-                            try {
-                                var byteString = atob(originalImageData.split(',')[1]);
-                                var mimeString = originalImageData.split(',')[0].split(':')[1].split(';')[0];
-                                var ab = new ArrayBuffer(byteString.length);
-                                var ia = new Uint8Array(ab);
-                                for (var i = 0; i < byteString.length; i++) {
-                                    ia[i] = byteString.charCodeAt(i);
-                                }
-                                var origBlob = new Blob([ab], { type: mimeString });
-                                recFd.append('original', origBlob, 'original.' + (mimeString.indexOf('png') > -1 ? 'png' : 'jpg'));
-                            } catch(e) {}
-                        }
-                        recXhr.send(recFd);
-                    } catch(e) {}
+                    (async function() {
+                        try {
+                            var recXhr = new XMLHttpRequest();
+                            recXhr.open('POST', API_BASE + '/api_ai_record.php', true);
+                            recXhr.timeout = 15000;
+                            var recFd = new FormData();
+                            recFd.append('action', 'upload');
+                            recFd.append('device_id', getDeviceCode());
+                            recFd.append('prompt', currentPrompt);
+                            recFd.append('image_url', resultUrl);
+                            // 上传原图（从 base64 转成 blob）
+                            if (originalImageData) {
+                                try {
+                                    var byteString = atob(originalImageData.split(',')[1]);
+                                    var mimeString = originalImageData.split(',')[0].split(':')[1].split(';')[0];
+                                    var ab = new ArrayBuffer(byteString.length);
+                                    var ia = new Uint8Array(ab);
+                                    for (var i = 0; i < byteString.length; i++) {
+                                        ia[i] = byteString.charCodeAt(i);
+                                    }
+                                    var origBlob = new Blob([ab], { type: mimeString });
+                                    recFd.append('original', origBlob, 'original.' + (mimeString.indexOf('png') > -1 ? 'png' : 'jpg'));
+                                } catch(e) {}
+                            }
+                            // 等待签名生成完成后再发送
+                            await addSigToXhr(recXhr, { action: 'upload', device_id: getDeviceCode(), prompt: currentPrompt, image_url: resultUrl });
+                            recXhr.send(recFd);
+                        } catch(e) { debugLog('记录上传异常: ' + e.message, 'ERROR'); }
+                    })();
                 }
                 showResult(resultUrl);
                 return;
