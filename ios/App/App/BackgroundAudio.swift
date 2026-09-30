@@ -180,7 +180,7 @@ public class BackgroundAudio: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             
-            self.scheduleNextPoll(url: url.absoluteString)
+            self.scheduleNextPoll(url: url)
         }
         
         pollingTask = task
