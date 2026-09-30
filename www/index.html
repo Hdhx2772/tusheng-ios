@@ -693,6 +693,31 @@ function showTabBar() {
 // 打开原生 AI 对话界面
 function openAIChat() {
     debugLog('=== openAIChat 开始 ===', 'INFO');
+    
+    // 安装 nativePromise 拦截器，调试消息是否真的发到原生端
+    if (!window._nativePromiseHooked) {
+        window._nativePromiseHooked = true;
+        var np = Capacitor.nativePromise || window.nativePromise;
+        if (np) {
+            var originalNP = np;
+            var hookedNP = function(pluginId, methodName, options) {
+                debugLog('nativePromise 调用: pluginId=' + pluginId + ', method=' + methodName + ', options=' + JSON.stringify(options), 'INFO');
+                var promise = originalNP.apply(this, arguments);
+                promise.then(function(res) {
+                    debugLog('nativePromise 成功: ' + pluginId + '.' + methodName + ' = ' + JSON.stringify(res).substring(0,200), 'SUCCESS');
+                }).catch(function(err) {
+                    debugLog('nativePromise 失败: ' + pluginId + '.' + methodName + ' = ' + JSON.stringify(err), 'ERROR');
+                });
+                return promise;
+            };
+            if (Capacitor.nativePromise) Capacitor.nativePromise = hookedNP;
+            if (window.nativePromise) window.nativePromise = hookedNP;
+            debugLog('nativePromise 拦截器已安装, 类型=' + (typeof originalNP), 'INFO');
+        } else {
+            debugLog('nativePromise 不存在! Capacitor keys=' + Object.keys(Capacitor).join(','), 'ERROR');
+        }
+    }
+    
     if (!window.Capacitor || !Capacitor.Plugins) {
         debugLog('Capacitor 或 Plugins 不存在', 'ERROR');
         showToast('当前版本不支持 AI 对话');
