@@ -1,0 +1,30 @@
+{
+	"appId": "com.tusheng.wanwu",
+	"appName": "图生万物",
+	"webDir": "www",
+	"server": {
+		"androidScheme": "https",
+		"allowNavigation": [
+			"wutong.xyz",
+			"*.wutong.xyz"
+		]
+	},
+	"ios": {
+		"contentInset": "always",
+		"backgroundColor": "#000000"
+	},
+	"plugins": {
+		"SplashScreen": {
+			"launchShowDuration": 1000,
+			"backgroundColor": "#f2f2f7"
+		}
+	},
+	"packageClassList": [
+		"CAPCameraPlugin",
+		"ClipboardPlugin",
+		"DevicePlugin",
+		"FilesystemPlugin",
+		"CAPHttpPlugin",
+		"StatusBarPlugin"
+	]
+}

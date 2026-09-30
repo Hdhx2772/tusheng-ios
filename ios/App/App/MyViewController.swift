@@ -87,6 +87,15 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         
         log("✅ 所有自定义插件注册完成")
         
+        // 打印 bridge 中实际注册的插件 id 列表，确认 AIChatPlugin 的实际 id
+        let registeredIds = bridge.plugins.keys.joined(separator: ", ")
+        log("📋 bridge已注册插件id: \(registeredIds)")
+        if let aiPlugin = bridge.plugins["AIChatPlugin"] {
+            log("✅ bridge中找到 AIChatPlugin: \(type(of: aiPlugin))")
+        } else {
+            log("❌ bridge中找不到 AIChatPlugin，可用id: \(registeredIds)")
+        }
+        
         // 在 JS 端手动注册 AIChatPlugin（需要先添加 PluginHeaders 声明原生方法，再 registerPlugin）
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.bridge?.webView?.evaluateJavaScript("""

@@ -1,0 +1,1745 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>图生万物</title>
+<style>
+:root {
+    --bg: #f2f2f7;
+    --card: rgba(255,255,255,0.95);
+    --text: #1c1c1e;
+    --text-secondary: #8e8e93;
+    --accent: #007aff;
+    --accent-gradient: linear-gradient(135deg, #007aff 0%, #5856d6 100%);
+    --border: rgba(60,60,67,0.12);
+    --shadow: 0 4px 20px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.12);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #667eea;
+    color: var(--text); height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column;
+    padding-top: env(safe-area-inset-top);
+}
+/* 导航栏 - 毛玻璃 */
+.nav-bar {
+    height: 48px; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.2); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+    border-bottom: 0.5px solid rgba(255,255,255,0.15); flex-shrink: 0; z-index: 100;
+    font-size: 18px; font-weight: 700; letter-spacing: -0.5px; color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+/* 主内容区 */
+.content { flex: 1; display: flex; flex-direction: column; padding: 8px 10px calc(70px + env(safe-area-inset-bottom)); gap: 6px; overflow: hidden; }
+/* 卡片 - 精致阴影 */
+.card {
+    background: rgba(255,255,255,0.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-radius: 18px; padding: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+    border: 1px solid rgba(255,255,255,0.6);
+}
+/* 上传区域 */
+.upload-card {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; min-height: 0; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px dashed rgba(255,255,255,0.5); background: rgba(255,255,255,0.15);
+}
+.upload-card:active { transform: scale(0.97); background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.8); }
+.upload-icon { width: 56px; height: 56px; margin-bottom: 12px; color: #fff;
+    background: rgba(255,255,255,0.2); border-radius: 16px; padding: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.upload-title { font-size: 17px; font-weight: 600; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.upload-hint { font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 5px; }
+/* 预览 */
+.preview-card { flex: 1; display: none; flex-direction: column; min-height: 0; padding: 10px; overflow: hidden; }
+.preview-card.show { display: flex; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.preview-img { width: 100%; height: 100%; flex: 1; min-height: 0; object-fit: contain; border-radius: 12px; background: rgba(255,255,255,0.1); }
+.preview-actions { display: flex; gap: 8px; margin-top: 8px; }
+/* 输入区 */
+.input-card { padding: 0; overflow: hidden; }
+.input-row { padding: 11px 14px; border-bottom: 0.5px solid var(--border); }
+.input-row:last-child { border-bottom: none; }
+.input-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+.prompt-input {
+    width: 100%; border: none; outline: none; font-size: 15px; background: transparent;
+    font-family: inherit; resize: none; min-height: 44px; color: var(--text); line-height: 1.4;
+}
+.prompt-input::placeholder { color: #c7c7cc; }
+.chip-group { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+    padding: 7px 16px; background: rgba(0,122,255,0.1); border-radius: 20px;
+    font-size: 13px; color: #007aff; cursor: pointer; font-weight: 600;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); border: 1px solid rgba(0,122,255,0.15);
+}
+.chip:active { background: rgba(0,122,255,0.2); transform: scale(0.93); }
+/* 按钮 - 渐变+阴影 */
+.btn {
+    padding: 13px; border-radius: 14px; font-size: 16px; font-weight: 600;
+    border: none; cursor: pointer; font-family: inherit; flex-shrink: 0;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); letter-spacing: -0.3px;
+}
+.btn:active { transform: scale(0.97); opacity: 0.85; }
+.btn-primary {
+    background: linear-gradient(135deg, #007aff 0%, #5856d6 50%, #af52de 100%); color: #fff;
+    box-shadow: 0 6px 20px rgba(88,86,214,0.4);
+}
+.btn-primary:disabled { background: #c7c7cc; box-shadow: none; color: #fff; }
+.btn-secondary { background: rgba(120,120,128,0.12); color: var(--accent); }
+.btn-danger { background: linear-gradient(135deg, #ff3b30 0%, #ff2d55 100%); color: #fff; box-shadow: 0 4px 14px rgba(255,59,48,0.3); }
+.btn-success { background: linear-gradient(135deg, #34c759 0%, #30d158 100%); color: #fff; box-shadow: 0 4px 14px rgba(52,199,89,0.3); }
+/* 加载 */
+.loading-card {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    gap: 20px; padding: 30px 20px; z-index: 200;
+    background: rgba(20,15,40,0.95) !important; backdrop-filter: blur(20px) !important;
+    border: none !important; box-shadow: none !important; border-radius: 0 !important;
+}
+.loading-card.show { display: flex; animation: fadeIn 0.4s ease; }
+.loading-ring-wrap {
+    position: relative; width: 80px; height: 80px;
+}
+.loading-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 3px solid transparent;
+    border-top-color: #fff; border-right-color: rgba(255,255,255,0.6);
+    animation: spin 1s linear infinite;
+}
+.loading-ring-bg {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.15);
+}
+.loading-ring-inner {
+    position: absolute; inset: 12px; border-radius: 50%;
+    background: rgba(255,255,255,0.1); backdrop-filter: blur(10px);
+    display: flex; align-items: center; justify-content: center;
+}
+.loading-ring-inner svg { width: 28px; height: 28px; color: #fff; animation: pulse 1.5s ease-in-out infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { opacity: 0.6; transform: scale(0.95); } 50% { opacity: 1; transform: scale(1.05); } }
+.loading-text { font-size: 18px; color: #fff; font-weight: 700; letter-spacing: 0.5px; text-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.loading-sub { font-size: 14px; color: rgba(255,255,255,0.7); font-weight: 500; }
+.loading-dots::after {
+    content: ''; animation: dots 1.5s steps(4, end) infinite;
+}
+@keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+/* 结果 */
+.result-card {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: none; flex-direction: column; padding: 20px; z-index: 200;
+    background: rgba(20,15,40,0.98) !important; backdrop-filter: blur(20px) !important;
+    border: none !important; box-shadow: none !important; border-radius: 0 !important;
+}
+.result-card.show { display: flex; animation: fadeIn 0.3s ease; }
+.result-slider {
+    position: relative; width: 100%; flex: 1; min-height: 150px; border-radius: 12px;
+    overflow: hidden; background: #f5f5f7; touch-action: none; box-shadow: inset 0 0 0 1px var(--border);
+}
+.result-after { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; transition: opacity 0.3s ease; }
+.result-before-wrap { position: absolute; top: 0; left: 0; height: 100%; width: 50%; overflow: hidden; }
+.result-before { position: absolute; top: 0; left: 0; height: 100%; object-fit: contain; }
+.result-handle {
+    position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 2px; background: rgba(255,255,255,0.9); z-index: 10;
+    box-shadow: 0 0 8px rgba(0,0,0,0.2);
+}
+.result-handle::after {
+    content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 32px; height: 32px; border-radius: 50%; background: #fff;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25); border: 1px solid rgba(0,0,0,0.05);
+}
+.result-hint {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.65); color: #fff; padding: 7px 14px; border-radius: 16px;
+    font-size: 12px; z-index: 20; pointer-events: none; backdrop-filter: blur(10px);
+}
+.result-actions { display: flex; gap: 8px; margin-top: 10px; }
+.result-actions button { flex: 1; }
+/* 历史 */
+.history-page { display: none; flex: 1; flex-direction: column; overflow: hidden; padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+.history-page.active { display: flex; }
+.history-header {
+    padding: 12px 16px 8px; display: flex; justify-content: space-between; align-items: center;
+}
+.history-title { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+.history-clear { font-size: 15px; color: #ff3b30; background: none; border: none; cursor: pointer; font-weight: 500; }
+.history-grid { flex: 1; padding: 0 12px 12px; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.history-item { aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: #e5e5ea; cursor: pointer;
+    transition: transform 0.15s ease; box-shadow: var(--shadow); }
+.history-item:active { transform: scale(0.95); }
+.history-item img { width: 100%; height: 100%; object-fit: cover; }
+.history-empty { text-align: center; padding: 60px 20px; color: var(--text-secondary); grid-column: 1/-1; font-size: 15px; }
+/* Tab Bar - 毛玻璃 */
+.tab-bar {
+    position: fixed; bottom: calc(8px + env(safe-area-inset-bottom));
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    left: 50%; transform: translateX(-50%);
+    width: calc(100% - 32px); max-width: 360px;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+    border-radius: 28px; display: flex; z-index: 100;
+    padding: 10px 0;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(255,255,255,0.15);
+}
+.tab-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; cursor: pointer; color: rgba(255,255,255,0.5); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+.tab-item.active { color: #fff; }
+.tab-item.active::before {
+    content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 28px; height: 3px; background: #fff; border-radius: 0 0 3px 3px;
+}
+.tab-item:active { opacity: 0.8; transform: scale(0.92); }
+.tab-item svg { width: 20px; height: 20px; stroke-width: 2.5; }
+.tab-item.active svg { stroke-width: 2.8; }
+.tab-item span { font-size: 9px; font-weight: 600; letter-spacing: 0.2px; }
+/* 弹窗 */
+.modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4); z-index: 1000; display: none;
+    align-items: flex-end; justify-content: center; backdrop-filter: blur(4px);
+    animation: fadeIn 0.2s ease;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+    background: rgba(255,255,255,0.98); backdrop-filter: blur(20px);
+    border-radius: 20px 20px 0 0; width: 100%;
+    padding: 20px 16px calc(24px + env(safe-area-inset-bottom)); max-height: 80vh;
+    overflow-y: auto; animation: slideUp 0.3s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal-title { font-size: 18px; font-weight: 700; text-align: center; margin-bottom: 12px; letter-spacing: -0.3px; }
+.modal-body { font-size: 15px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px; }
+.modal-actions { display: flex; gap: 8px; }
+.modal-actions button { flex: 1; }
+/* 居中弹窗 */
+.modal-center { align-items: center; }
+.modal-center .modal { border-radius: 20px; margin: 20px; padding: 24px 20px; animation: scaleIn 0.25s ease; }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+/* Toast */
+.toast {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.82); color: #fff; padding: 14px 22px; border-radius: 14px;
+    font-size: 14px; z-index: 2000; display: none; max-width: 80%; text-align: center;
+    backdrop-filter: blur(10px); box-shadow: var(--shadow-lg); animation: fadeIn 0.2s ease;
+}
+.toast.show { display: block; }
+/* 授权码 */
+.auth-code {
+    font-size: 15px; font-weight: 600; color: var(--text); background: rgba(120,120,128,0.08);
+    border-radius: 10px; padding: 12px; margin: 12px 0; text-align: center;
+    font-family: "SF Mono", Menlo, monospace; word-break: break-all;
+}
+/* 调试框样式已移到内联，这里保留空 */
+#debugBox .log-NETWORK { color: #ce93d8; }
+#debugBox .log-LIFECYCLE { color: #4dd0e1; }
+#debugBox .log-ACTION { color: #fff59d; }
+#debugBox .log-time { color: #666; margin-right: 4px; }
+.debug-box.show { display: block; }
+/* 隐藏文件输入 */
+#fileInput {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 10;
+    width: 100%;
+    height: 100%;
+}
+</style>
+<script src="capacitor.js"></script>
+
+</head>
+<body>
+<div class="toast" id="toast"></div>
+
+<!-- 导航栏 -->
+<div class="nav-bar">图生万物 <span style="font-size:11px;color:#8e8e93;margin-left:6px;font-weight:400;">v1.1 UI</span></div>
+
+<!-- 创作页 -->
+<div class="content" id="pageCreate">
+    <div class="card upload-card" id="uploadCard" style="position:relative;">
+        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+        </svg>
+        <div class="upload-title">选择图片</div>
+        <div class="upload-hint">从相册选择需要编辑的图片</div>
+<input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp">
+    </div>
+    <div class="card preview-card" id="previewCard">
+        <img class="preview-img" id="previewImg" src="" alt="">
+        <div class="preview-actions">
+            <button class="btn btn-secondary" onclick="selectImage()">重新选择</button>
+            <button class="btn btn-danger" onclick="removeImage()">移除</button>
+        </div>
+    </div>
+    <div class="card input-card" id="inputCard">
+        <div class="input-row">
+            <div class="input-label">修改描述</div>
+            <textarea class="prompt-input" id="promptInput" placeholder="描述你想要的效果..." rows="2" onfocus="hideTabBar()" onblur="showTabBar()"></textarea>
+        </div>
+        <div class="input-row">
+            <div class="chip-group">
+                <span class="chip" onclick="setPreset('移除背景')">移除背景</span>
+                <span class="chip" onclick="setPreset('增强清晰度')">增强清晰度</span>
+                <span class="chip" onclick="setPreset('动漫风格')">动漫风格</span>
+                <span class="chip" onclick="setPreset('换海边背景')">换背景</span>
+                <span class="chip" onclick="setPreset('去水印')">去水印</span>
+            </div>
+        </div>
+    </div>
+    <button class="btn btn-primary" id="generateBtn" onclick="submitEdit()">开始生成</button>
+    <button class="btn btn-primary" id="aiChatBtn" onclick="openAIChat()" style="margin-top:10px;">AI 对话</button>
+    <div class="card loading-card" id="loadingCard">
+        <div class="loading-ring-wrap">
+            <div class="loading-ring-bg"></div>
+            <div class="loading-ring"></div>
+            <div class="loading-ring-inner">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z"/>
+                </svg>
+            </div>
+        </div>
+        <div class="loading-text"><span id="loadingText">AI 正在处理</span><span class="loading-dots"></span></div>
+        <div class="loading-sub" id="loadingSub">请稍候，正在为您创作</div>
+    </div>
+    <div class="card result-card" id="resultCard">
+        <div class="result-slider" id="resultSlider">
+            <img class="result-after" id="resultAfter" src="">
+            <div class="result-before-wrap" id="resultBeforeWrap">
+                <img class="result-before" id="resultBefore" src="">
+            </div>
+            <div class="result-handle" id="resultHandle"></div>
+            <div class="result-hint" id="resultHint">左右滑动对比</div>
+        </div>
+        <div class="result-actions">
+            <button class="btn btn-success" onclick="saveToAlbum()">保存到相册</button>
+            <button class="btn btn-secondary" onclick="continueCreate()">继续创作</button>
+            <button class="btn btn-secondary" onclick="resetAll()">重新开始</button>
+        </div>
+    </div>
+</div>
+
+<!-- 历史页 -->
+<div class="history-page" id="pageHistory">
+    <div class="history-header">
+        <div class="history-title">历史记录</div>
+        <button class="history-clear" onclick="clearHistory()">清空</button>
+    </div>
+    <div class="history-grid" id="historyGrid"></div>
+</div>
+
+<!-- Tab Bar -->
+<div class="tab-bar">
+    <div class="tab-item active" id="tabCreate" onclick="switchTab('create')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+        </svg>
+        <span>创作</span>
+    </div>
+    <div class="tab-item" id="tabHistory" onclick="switchTab('history')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+        </svg>
+        <span>历史</span>
+    </div>
+</div>
+
+<!-- 免责声明 -->
+<div class="modal-overlay modal-center" id="disclaimerModal">
+    <div class="modal">
+        <div class="modal-title">用户协议与免责声明</div>
+        <div class="modal-body" style="max-height:40vh;overflow-y:auto;font-size:13px;">
+            <p style="margin-bottom:8px;">1. 本应用仅供学习交流使用，严禁用于任何违法违规用途。</p>
+            <p style="margin-bottom:8px;">2. 严禁生成色情、暴力、政治敏感、侵犯他人权益等内容。</p>
+            <p style="margin-bottom:8px;">3. 用户使用本应用产生的一切后果由用户自行承担。</p>
+            <p style="margin-bottom:8px;">4. 本应用不对生成结果做任何保证。</p>
+            <p>5. 使用即视为同意以上全部条款。</p>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="disagreeDisclaimer()">不同意</button>
+            <button class="btn btn-primary" onclick="agreeDisclaimer()">同意并继续</button>
+        </div>
+    </div>
+</div>
+
+<!-- 未授权弹窗 -->
+<div class="modal-overlay modal-center" id="authModal">
+    <div class="modal">
+        <div class="modal-title">设备未授权</div>
+        <div class="modal-body" style="text-align:center;">请将以下授权码发给作者开通</div>
+        <div class="auth-code" id="authCode">DEV_xxxx</div>
+        <div class="modal-actions">
+            <button class="btn btn-primary" onclick="copyAuthCode()">复制授权码</button>
+            <button class="btn btn-secondary" onclick="closeAuthModal()">我知道了</button>
+        </div>
+    </div>
+</div>
+
+<!-- 封禁弹窗 -->
+<div class="modal-overlay modal-center" id="banModal">
+    <div class="modal">
+        <div class="modal-title" style="color:#ff3b30;">设备已封禁</div>
+        <div class="modal-body" id="banReason" style="text-align:center;">违反使用规则</div>
+        <div class="modal-actions">
+            <button class="btn btn-danger" style="flex:1;" onclick="closeBanModal()">我知道了</button>
+        </div>
+    </div>
+</div>
+
+<!-- 确认弹窗 -->
+<div class="modal-overlay modal-center" id="confirmOverlay">
+    <div class="modal">
+        <div class="modal-title">确认操作</div>
+        <div class="modal-body" id="confirmText" style="text-align:center;"></div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeConfirm()">取消</button>
+            <button class="btn btn-danger" id="confirmOkBtn">确定</button>
+        </div>
+    </div>
+</div>
+
+<!-- 历史详情弹窗 -->
+<div class="modal-overlay modal-center" id="modalOverlay">
+    <div class="modal">
+        <img id="modalImg" src="" style="width:100%;border-radius:8px;margin-bottom:12px;max-height:40vh;object-fit:contain;">
+        <div class="modal-body" id="modalPrompt" style="font-size:13px;max-height:60px;overflow-y:auto;"></div>
+        <div class="modal-actions">
+            <button class="btn btn-success" onclick="saveFromHistory()">保存</button>
+            <button class="btn btn-danger" onclick="deleteFromHistory()">删除</button>
+            <button class="btn btn-secondary" onclick="closeModal()">关闭</button>
+        </div>
+    </div>
+</div>
+
+<script>
+var selectedFile = null;
+var originalImageData = null;
+var lastPrompt = '';
+var resultImageUrl = null;
+var currentHistoryIndex = -1;
+// 后台生成支持
+var currentTaskId = null;
+var currentPrompt = '';
+var generationStartTime = 0;
+var isGenerating = false;
+var pollCount = 0;
+var historySaved = false;
+var wasInBackgroundDuringGeneration = false; // 防止重复保存历史记录
+var API_BASE = 'https://wutong.xyz';
+
+// ========== API 签名验证（HMAC-SHA256） ==========
+var API_SECRET = 'tsw_2024_secure_a1b2c3d4e5f6g7h8';
+
+// 生成随机字符串
+function generateNonce(length) {
+    length = length || 16;
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    var nonce = '';
+    for (var i = 0; i < length; i++) {
+        nonce += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return nonce;
+}
+
+// HMAC-SHA256 签名（异步，用 Web Crypto API）
+async function hmacSha256(message, secret) {
+    var encoder = new TextEncoder();
+    var keyData = encoder.encode(secret);
+    var messageData = encoder.encode(message);
+    var key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    var signature = await crypto.subtle.sign('HMAC', key, messageData);
+    var hashArray = Array.from(new Uint8Array(signature));
+    return hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
+
+// 生成签名参数（异步）
+async function generateSig(params) {
+    var timestamp = Math.floor(Date.now() / 1000).toString();
+    var nonce = generateNonce(16);
+    var allParams = {};
+    for (var k in params) { allParams[k] = params[k]; }
+    allParams['timestamp'] = timestamp;
+    allParams['nonce'] = nonce;
+    var sortedKeys = Object.keys(allParams).sort();
+    var message = sortedKeys.map(function(key) { return key + '=' + allParams[key]; }).join('&');
+    var sign = await hmacSha256(message, API_SECRET);
+    return { timestamp: timestamp, nonce: nonce, sign: sign };
+}
+
+// 给 XHR 添加签名请求头
+async function addSigToXhr(xhr, params) {
+    var sig = await generateSig(params);
+    xhr.setRequestHeader('X-Auth-Timestamp', sig.timestamp);
+    xhr.setRequestHeader('X-Auth-Nonce', sig.nonce);
+    xhr.setRequestHeader('X-Auth-Signature', sig.sign);
+}
+// ========== API 签名验证结束 ==========
+var APP_VERSION = '1.1';
+function showToast(msg, dur) {
+    dur = dur || 2000;
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function(){ t.classList.remove('show'); }, dur);
+}
+
+function getDeviceCode() {
+    var code = localStorage.getItem('dev_code');
+    if (!code) {
+        code = 'DEV_' + Math.random().toString(16).substring(2,10) + Math.random().toString(16).substring(2,10);
+        localStorage.setItem('dev_code', code);
+    }
+    return code;
+}
+
+var fileInput = document.getElementById('fileInput');
+fileInput.addEventListener('change', function(e) {
+    debugLog('fileInput change 触发，文件数: ' + (e.target.files ? e.target.files.length : 0), 'INFO');
+    if (e.target.files && e.target.files.length > 0) {
+        var f = e.target.files[0];
+        debugLog('选中文件: ' + f.name + ' (' + (f.size/1024).toFixed(0) + 'KB, ' + f.type + ')', 'INFO');
+        handleFile(f);
+    } else {
+        debugLog('fileInput change 但没有文件', 'WARN');
+    }
+});
+
+function selectImage() {
+    debugLog('selectImage 被调用，触发 fileInput.click()', 'INFO');
+    fileInput.click();
+}
+
+// 读取 EXIF 方向
+function getExifOrientation(file, callback) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        var view = new DataView(e.target.result);
+        if (view.getUint16(0, false) != 0xFFD8) { callback(1); return; }
+        var length = view.byteLength, offset = 2;
+        while (offset < length) {
+            var marker = view.getUint16(offset, false);
+            offset += 2;
+            if (marker == 0xFFE1) {
+                if (view.getUint32(offset + 2, false) != 0x45786966) { callback(1); return; }
+                var little = view.getUint16(offset + 8, false) == 0x4949;
+                offset += 2 + view.getUint32(offset + 4, little);
+                var tags = view.getUint16(offset, little);
+                offset += 2;
+                for (var i = 0; i < tags; i++) {
+                    if (view.getUint16(offset + (i * 12), little) == 0x0112) {
+                        callback(view.getUint16(offset + (i * 12) + 8, little));
+                        return;
+                    }
+                }
+            } else if ((marker & 0xFF00) != 0xFF00) {
+                break;
+            } else {
+                offset += view.getUint16(offset, false);
+            }
+        }
+        callback(1);
+    };
+    reader.readAsArrayBuffer(file.slice(0, 64 * 1024));
+}
+
+// 用 Canvas 修正图片方向
+function fixImageOrientation(file, callback) {
+    getExifOrientation(file, function(orientation) {
+        if (orientation === 1) { callback(file); return; }
+        var img = new Image();
+        img.onload = function() {
+            var canvas = document.createElement('canvas');
+            var ctx = canvas.getContext('2d');
+            var w = img.width, h = img.height;
+            if (orientation > 4) { canvas.width = h; canvas.height = w; }
+            else { canvas.width = w; canvas.height = h; }
+            switch (orientation) {
+                case 2: ctx.transform(-1, 0, 0, 1, w, 0); break;
+                case 3: ctx.transform(-1, 0, 0, -1, w, h); break;
+                case 4: ctx.transform(1, 0, 0, -1, 0, h); break;
+                case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+                case 6: ctx.transform(0, 1, -1, 0, h, 0); break;
+                case 7: ctx.transform(0, -1, -1, 0, h, w); break;
+                case 8: ctx.transform(0, -1, 1, 0, 0, w); break;
+            }
+            ctx.drawImage(img, 0, 0);
+            // PNG保持原格式，避免透明背景变黑
+            var mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+            var quality = mimeType === 'image/jpeg' ? 0.92 : undefined;
+            canvas.toBlob(function(blob) {
+                callback(blob);
+            }, mimeType, quality);
+        };
+        img.src = URL.createObjectURL(file);
+    });
+}
+
+// 压缩图片（限制最大边长，降低体积）
+function compressImage(file, maxSize, quality, callback) {
+    maxSize = maxSize || 2048;
+    quality = quality || 0.85;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        var img = new Image();
+        img.onload = function() {
+            var w = img.width, h = img.height;
+            var scale = Math.min(1, maxSize / Math.max(w, h));
+            if (scale === 1 && file.size < 2*1024*1024) {
+                callback(file);
+                return;
+            }
+            var nw = Math.round(w * scale);
+            var nh = Math.round(h * scale);
+            var canvas = document.createElement('canvas');
+            canvas.width = nw;
+            canvas.height = nh;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, nw, nh);
+            canvas.toBlob(function(blob) {
+                var compressedFile = new File([blob], 'compressed.jpg', { type: 'image/jpeg' });
+                debugLog('图片压缩: ' + (file.size/1024).toFixed(0) + 'KB -> ' + (compressedFile.size/1024).toFixed(0) + 'KB (' + nw + 'x' + nh + ')');
+                callback(compressedFile);
+            }, 'image/jpeg', quality);
+        };
+        img.onerror = function() { callback(file); };
+        img.src = e.target.result;
+    };
+    reader.onerror = function() { callback(file); };
+    reader.readAsDataURL(file);
+}
+
+function handleFile(file) {
+    debugLog('handleFile 开始: ' + file.name + ' (' + (file.size/1024).toFixed(0) + 'KB, ' + file.type + ')', 'INFO');
+    var allowed = ['image/jpeg','image/png','image/webp'];
+    if (allowed.indexOf(file.type) === -1) { showToast('只支持 JPG、PNG、WebP'); debugLog('文件类型不支持: ' + file.type, 'ERROR'); return; }
+    if (file.size > 10*1024*1024) { showToast('图片不能超过 10MB'); debugLog('文件过大: ' + (file.size/1024/1024).toFixed(2) + 'MB', 'ERROR'); return; }
+    showToast('正在处理图片...', 800);
+    try {
+        fixImageOrientation(file, function(fixedFile) {
+            debugLog('fixImageOrientation 完成', 'INFO');
+            compressImage(fixedFile, 2048, 0.85, function(compressedFile) {
+                debugLog('compressImage 完成: ' + (compressedFile.size/1024).toFixed(0) + 'KB', 'INFO');
+                selectedFile = compressedFile;
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    originalImageData = e.target.result;
+                    document.getElementById('previewImg').src = e.target.result;
+                    document.getElementById('uploadCard').style.display = 'none';
+                    document.getElementById('previewCard').classList.add('show');
+                    debugLog('图片预览显示成功', 'SUCCESS');
+                };
+                reader.onerror = function() { debugLog('FileReader 读取失败', 'ERROR'); showToast('图片读取失败'); };
+                reader.readAsDataURL(compressedFile);
+            });
+        });
+    } catch(err) {
+        debugLog('handleFile 异常: ' + err.message, 'ERROR');
+        showToast('图片处理失败: ' + err.message);
+    }
+}
+
+function removeImage() {
+    selectedFile = null;
+    fileInput.value = '';
+    document.getElementById('previewCard').classList.remove('show');
+    document.getElementById('uploadCard').style.display = 'flex';
+}
+
+function setPreset(text) {
+    document.getElementById('promptInput').value = text;
+}
+
+function switchTab(tab) {
+    if (tab === 'create') {
+        document.getElementById('pageCreate').style.display = 'flex';
+        document.getElementById('pageHistory').classList.remove('active');
+        document.getElementById('tabCreate').classList.add('active');
+        document.getElementById('tabHistory').classList.remove('active');
+    } else {
+        document.getElementById('pageCreate').style.display = 'none';
+        document.getElementById('pageHistory').classList.add('active');
+        document.getElementById('tabCreate').classList.remove('active');
+        document.getElementById('tabHistory').classList.add('active');
+        loadHistory();
+    }
+}
+
+// 键盘弹出时隐藏底栏
+function hideTabBar() {
+    var tabBar = document.querySelector('.tab-bar');
+    if (tabBar) tabBar.style.transform = 'translateX(-50%) translateY(100px)';
+    if (tabBar) tabBar.style.opacity = '0';
+}
+
+// 键盘收起时显示底栏
+function showTabBar() {
+    setTimeout(function() {
+        var tabBar = document.querySelector('.tab-bar');
+        if (tabBar) tabBar.style.transform = 'translateX(-50%)';
+        if (tabBar) tabBar.style.opacity = '1';
+        // 修复键盘收起后页面上移
+        window.scrollTo(0, 0);
+        document.body.scrollTop = 0;
+    }, 100);
+}
+
+
+// 打开原生 AI 对话界面
+function openAIChat() {
+    debugLog('=== openAIChat 开始 ===', 'INFO');
+    if (!window.Capacitor || !Capacitor.Plugins) {
+        debugLog('Capacitor 或 Plugins 不存在', 'ERROR');
+        showToast('当前版本不支持 AI 对话');
+        return;
+    }
+    var plugin = Capacitor.Plugins.AIChatPlugin || Capacitor.Plugins.AIChat;
+    if (!plugin) {
+        debugLog('可用插件: ' + Object.keys(Capacitor.Plugins).join(', '), 'ERROR');
+        showToast('当前版本不支持 AI 对话');
+        return;
+    }
+    debugLog('找到插件: ' + (typeof plugin) + ', openChat类型: ' + (typeof plugin.openChat), 'INFO');
+    
+    // 检查 PluginHeaders
+    if (Capacitor.PluginHeaders) {
+        var header = Capacitor.PluginHeaders.find(function(p){return p.name==='AIChatPlugin';});
+        debugLog('PluginHeaders: ' + JSON.stringify(header), 'INFO');
+    } else {
+        debugLog('PluginHeaders 不存在', 'ERROR');
+    }
+    
+    try {
+        var result = plugin.openChat();
+        debugLog('openChat 返回: ' + (result ? 'Promise' : 'null/undefined'), 'INFO');
+        if (result && result.then) {
+            result.then(function(res) {
+                debugLog('AI 对话已打开: ' + JSON.stringify(res), 'SUCCESS');
+            }).catch(function(err) {
+                debugLog('打开 AI 对话失败(catch): ' + JSON.stringify(err) + ' message=' + err.message, 'ERROR');
+                showToast('打开失败: ' + err.message);
+            });
+        }
+    } catch(e) {
+        debugLog('openChat 抛出异常: ' + e.message + '\n' + e.stack, 'ERROR');
+        showToast('异常: ' + e.message);
+    }
+}
+async function submitEdit() {
+    if (!selectedFile) { showToast('请先选择图片'); return; }
+    var prompt = document.getElementById('promptInput').value.trim();
+    if (!prompt) { showToast('请输入修改描述'); return; }
+    var devCode = getDeviceCode();
+    debugLog('开始检查授权，设备码: ' + devCode, 'INFO');
+    showToast('检查授权...', 1000);
+    var xhrAuth = new XMLHttpRequest();
+    xhrAuth.open('POST', API_BASE + '/api_ai_record.php', true);
+    xhrAuth.timeout = 15000;
+    await addSigToXhr(xhrAuth, { action: 'check_auth', device_id: devCode });
+    xhrAuth.onload = function() {
+        debugLog('授权检查响应: ' + xhrAuth.status + ' ' + xhrAuth.responseText.substring(0,150), 'NETWORK');
+        try {
+            var authData = JSON.parse(xhrAuth.responseText);
+            if (authData.status === 'banned') { debugLog('🚫 设备已被封禁: ' + (authData.reason || '无原因'), 'WARN'); showBanModal(authData.reason); return; }
+            if (!authData.authorized) { debugLog('❌ 未授权，显示授权弹窗', 'WARN'); showAuthModal(); return; }
+            debugLog('✅ 授权通过，开始生成', 'SUCCESS');
+            doGenerate(prompt);
+        } catch(e) {
+            debugLog('❌ 授权解析错误: ' + e.message + ' raw=' + xhrAuth.responseText.substring(0,100), 'ERROR');
+            showToast('授权解析错误: ' + xhrAuth.responseText.substring(0,100));
+        }
+    };
+    xhrAuth.onerror = function() { debugLog('❌ 授权网络异常', 'ERROR'); showToast('授权网络异常，请检查网络'); };
+    xhrAuth.ontimeout = function() { debugLog('❌ 授权检查超时 (15s)', 'ERROR'); showToast('授权检查超时，请重试'); };
+    var fdAuth = new FormData();
+    fdAuth.append('action', 'check_auth');
+    fdAuth.append('device_id', devCode);
+    xhrAuth.send(fdAuth);
+}
+
+async function doGenerate(prompt) {
+    resultShown = false;
+    document.getElementById('uploadCard').style.display = 'none';
+    document.getElementById('previewCard').classList.remove('show');
+    document.getElementById('inputCard').style.display = 'none';
+    document.getElementById('generateBtn').style.display = 'none';
+    document.getElementById('loadingCard').classList.add('show');
+    startBackgroundAudio();
+    setLoading('正在上传图片...', '');
+    generationStartTime = Date.now();
+    currentPrompt = prompt;
+    isGenerating = true;
+    historySaved = false;
+    var fd = new FormData();
+    fd.append('action', 'upload');
+    fd.append('image', selectedFile);
+    fd.append('prompt', prompt);
+    debugLog('开始上传图片...');
+    var xhrUpload = new XMLHttpRequest();
+    xhrUpload.open('POST', API_BASE + '/ai_edit.php', true);
+    xhrUpload.timeout = 120000;
+    await addSigToXhr(xhrUpload, { action: 'upload', prompt: prompt });
+    xhrUpload.upload.onprogress = function(e) {
+        if (e.lengthComputable) {
+            var pct = Math.round(e.loaded / e.total * 100);
+            setLoading('正在上传图片... ' + pct + '%', '');
+        }
+    };
+    xhrUpload.onload = function() {
+        var raw = xhrUpload.responseText;
+        debugLog('上传返回: ' + raw.substring(0,150));
+        try {
+            var data = JSON.parse(raw);
+            currentTaskId = data.taskId || data.task_id || '';
+            debugLog('解析后: taskId=' + (currentTaskId || '未找到'));
+            if (data.error) { isGenerating = false; showToast('失败：' + data.error, 3000); resetUI(); return; }
+            if (!currentTaskId) { isGenerating = false; showToast('失败：未获取到任务ID', 3000); resetUI(); return; }
+            setLoading('AI 正在处理...', '');
+            pollCount = 0;
+            // 启动原生后台轮询（即使 App 在后台也能继续轮询并发通知）
+            if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.BackgroundAudio) {
+                var pollUrl = API_BASE + '/ai_edit.php?action=status&taskId=' + encodeURIComponent(currentTaskId);
+                debugLog('启动原生后台轮询: ' + pollUrl, 'INFO');
+                Capacitor.Plugins.BackgroundAudio.startPolling({ pollUrl: pollUrl }).catch(function(e) {
+                    debugLog('原生轮询启动失败: ' + JSON.stringify(e), 'ERROR');
+                });
+            }
+            pollTaskStatus();
+        } catch(e) {
+            isGenerating = false;
+            showToast('上传解析错误: ' + raw.substring(0,100), 3000); resetUI();
+        }
+    };
+    xhrUpload.onerror = function() { isGenerating = false; showToast('上传网络异常，请检查网络', 3000); resetUI(); };
+    xhrUpload.ontimeout = function() { isGenerating = false; showToast('上传超时，请重试', 3000); resetUI(); };
+    xhrUpload.send(fd);
+}
+
+// 轮询任务状态（支持后台恢复）
+async function pollTaskStatus() {
+    if (!isGenerating || !currentTaskId) return;
+    pollCount++;
+    debugLog('轮询第' + pollCount + '次 taskId=' + currentTaskId);
+    var xhrPoll = new XMLHttpRequest();
+    xhrPoll.open('GET', API_BASE + '/ai_edit.php?action=status&taskId=' + encodeURIComponent(currentTaskId), true);
+    xhrPoll.timeout = 30000;
+    await addSigToXhr(xhrPoll, { action: 'status', taskId: currentTaskId });
+    xhrPoll.onload = function() {
+        var raw2 = xhrPoll.responseText;
+        debugLog('轮询返回: ' + raw2.substring(0,100));
+        try {
+            var sData = JSON.parse(raw2);
+            if (sData.status === 'completed') {
+                isGenerating = false;
+                var elapsed = Math.round((Date.now()-generationStartTime)/1000);
+                showToast('完成，用时 ' + elapsed + ' 秒', 2500);
+                var resultUrl = sData.image || sData.result_url || sData.output_url || sData.image_url || sData.url || (sData.images && sData.images[0]) || '';
+                debugLog('结果URL: ' + resultUrl + ' 完整响应: ' + JSON.stringify(sData).substring(0,300));
+                if (!resultUrl) { showToast('未获取到结果图片', 3000); resetUI(); return; }
+                // 防止重复保存和重复上传
+                if (!historySaved) {
+                    historySaved = true;
+                    var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
+                    hist.unshift({ prompt: currentPrompt, imagePath: resultUrl });
+                    localStorage.setItem('edit_history', JSON.stringify(hist.slice(0,50)));
+                    
+                    // 上传记录到服务器（包含原图）
+                    (async function() {
+                        try {
+                            var recXhr = new XMLHttpRequest();
+                            recXhr.open('POST', API_BASE + '/api_ai_record.php', true);
+                            recXhr.timeout = 15000;
+                            var recFd = new FormData();
+                            recFd.append('action', 'upload');
+                            recFd.append('device_id', getDeviceCode());
+                            recFd.append('prompt', currentPrompt);
+                            recFd.append('image_url', resultUrl);
+                            // 上传原图（从 base64 转成 blob）
+                            if (originalImageData) {
+                                try {
+                                    var byteString = atob(originalImageData.split(',')[1]);
+                                    var mimeString = originalImageData.split(',')[0].split(':')[1].split(';')[0];
+                                    var ab = new ArrayBuffer(byteString.length);
+                                    var ia = new Uint8Array(ab);
+                                    for (var i = 0; i < byteString.length; i++) {
+                                        ia[i] = byteString.charCodeAt(i);
+                                    }
+                                    var origBlob = new Blob([ab], { type: mimeString });
+                                    recFd.append('original', origBlob, 'original.' + (mimeString.indexOf('png') > -1 ? 'png' : 'jpg'));
+                                } catch(e) {}
+                            }
+                            // 等待签名生成完成后再发送
+                            await addSigToXhr(recXhr, { action: 'upload', device_id: getDeviceCode(), prompt: currentPrompt, image_url: resultUrl });
+                            recXhr.send(recFd);
+                        } catch(e) { debugLog('记录上传异常: ' + e.message, 'ERROR'); }
+                    })();
+                }
+                showResult(resultUrl);
+                return;
+            }
+            if (sData.status === 'failed') {
+                isGenerating = false;
+                // 停止原生后台轮询
+                if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.BackgroundAudio) {
+                    Capacitor.Plugins.BackgroundAudio.stopPolling().catch(function() {});
+                }
+                showToast('失败：' + (sData.error || '生成失败'), 3000);
+                resetUI();
+                return;
+            }
+            if (sData.error) { isGenerating = false; showToast('失败：' + sData.error, 3000); resetUI(); return; }
+            if (pollCount >= 120) { isGenerating = false; showToast('生成超时，请稍后重试', 3000); resetUI(); return; }
+            setTimeout(pollTaskStatus, 1500);
+        } catch(e) {
+            // 解析错误不重置UI，可能是临时网络问题，继续轮询
+            debugLog('轮询解析错误: ' + e.message + ' raw=' + raw2.substring(0,100), 'ERROR');
+            if (pollCount < 120) {
+                setTimeout(pollTaskStatus, 2000);
+            } else {
+                isGenerating = false;
+                showToast('生成超时，请稍后重试', 3000); resetUI();
+            }
+        }
+    };
+    xhrPoll.onerror = function() { 
+        // 网络错误可能是后台切换导致，不重置UI，继续显示加载页
+        if (pollCount < 120) {
+            setTimeout(pollTaskStatus, 2000);
+        } else {
+            isGenerating = false;
+            showToast('轮询网络异常', 3000); resetUI();
+        }
+    };
+    xhrPoll.ontimeout = function() { 
+        // 超时也不重置UI，继续显示加载页
+        if (pollCount < 120) {
+            setTimeout(pollTaskStatus, 2000);
+        } else {
+            isGenerating = false;
+            showToast('轮询超时', 3000); resetUI();
+        }
+    };
+    xhrPoll.send();
+}
+
+// 回到前台时检查任务状态
+function checkTaskOnResume() {
+    if (isGenerating && currentTaskId) {
+        debugLog('回到前台，检查任务状态 taskId=' + currentTaskId);
+        setLoading('AI 正在处理...', '');
+        // 重置轮询计数，继续等待
+        pollCount = Math.max(0, pollCount - 10);
+        pollTaskStatus();
+    }
+}
+
+// 监听页面可见性变化（后台/前台切换）
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        setTimeout(checkTaskOnResume, 500);
+    }
+});
+window.addEventListener('pageshow', function() {
+    setTimeout(checkTaskOnResume, 500);
+});
+
+var DEBUG_MODE = false; // 每次进入App默认关闭，点击换背景10次才开启
+
+function setLoading(t, s) {
+    document.getElementById('loadingText').textContent = t;
+    document.getElementById('loadingSub').textContent = s;
+    debugLog(t + (s ? ' (' + s + ')' : ''), 'INFO');
+}
+
+// 接收原生日志
+window.nativeLog = function(logs) {
+    var lines = logs.split('\n');
+    lines.forEach(function(line) {
+        if (line && line.trim()) {
+            debugLog(line, 'LIFECYCLE');
+        }
+    });
+};
+
+// 增强版调试日志系统
+var debugLogs = [];
+var DEBUG_MAX_LINES = 500;
+
+function debugLog(msg, level) {
+    // 始终记录日志，调试框只在开启调试模式后显示
+    level = level || 'INFO';
+    var now = new Date();
+    var time = now.getHours().toString().padStart(2,'0') + ':' + 
+               now.getMinutes().toString().padStart(2,'0') + ':' + 
+               now.getSeconds().toString().padStart(2,'0') + '.' + 
+               now.getMilliseconds().toString().padStart(3,'0');
+    
+    var entry = { time: time, msg: String(msg), level: level };
+    debugLogs.push(entry);
+    if (debugLogs.length > DEBUG_MAX_LINES) debugLogs.shift();
+    
+    if (!DEBUG_MODE) return;
+    var dbg = document.getElementById('debugBox');
+    if (!dbg || dbg.style.display === 'none') return;
+    var contentEl = document.getElementById('debugContent');
+    if (contentEl && contentEl.style.display !== 'none') {
+        var line = document.createElement('div');
+        line.style.cssText = 'margin-bottom:2px;word-break:break-all;';
+        var timeSpan = document.createElement('span');
+        timeSpan.style.cssText = 'color:#666;';
+        timeSpan.textContent = '[' + time + ']';
+        var levelSpan = document.createElement('span');
+        levelSpan.style.cssText = 'color:#888;margin:0 4px;';
+        levelSpan.textContent = '[' + level + ']';
+        var msgSpan = document.createElement('span');
+        if (level === 'ERROR') msgSpan.style.color = '#ff6b6b';
+        else if (level === 'SUCCESS') msgSpan.style.color = '#51cf66';
+        else msgSpan.style.color = '#ddd';
+        msgSpan.textContent = String(msg);
+        line.appendChild(timeSpan);
+        line.appendChild(levelSpan);
+        line.appendChild(msgSpan);
+        contentEl.appendChild(line);
+        contentEl.scrollTop = contentEl.scrollHeight;
+        while (contentEl.children.length > DEBUG_MAX_LINES) {
+            contentEl.removeChild(contentEl.firstChild);
+        }
+    }
+}
+
+function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function createDebugBox() {
+    var dbg = document.getElementById('debugBox');
+    if (dbg) {
+        dbg.style.display = 'block';
+        renderDebugLogs();
+    }
+}
+
+function renderDebugLogs() {
+    var contentEl = document.getElementById('debugContent');
+    if (!contentEl) return;
+    contentEl.innerHTML = '';
+    debugLogs.forEach(function(entry) {
+        var line = document.createElement('div');
+        line.style.cssText = 'margin-bottom:2px;word-break:break-all;';
+        var timeSpan = document.createElement('span');
+        timeSpan.style.cssText = 'color:#666;';
+        timeSpan.textContent = '[' + entry.time + ']';
+        var levelSpan = document.createElement('span');
+        levelSpan.style.cssText = 'color:#888;margin:0 4px;';
+        levelSpan.textContent = '[' + entry.level + ']';
+        var msgSpan = document.createElement('span');
+        if (entry.level === 'ERROR') msgSpan.style.color = '#ff6b6b';
+        else if (entry.level === 'SUCCESS') msgSpan.style.color = '#51cf66';
+        else msgSpan.style.color = '#ddd';
+        msgSpan.textContent = entry.msg;
+        line.appendChild(timeSpan);
+        line.appendChild(levelSpan);
+        line.appendChild(msgSpan);
+        contentEl.appendChild(line);
+    });
+    contentEl.scrollTop = contentEl.scrollHeight;
+    var title = document.getElementById('debugTitle');
+    if (title) title.textContent = '调试日志 (' + debugLogs.length + ')';
+}
+
+function minimizeDebugBox() {
+    var contentEl = document.getElementById('debugContent');
+    var title = document.getElementById('debugTitle');
+    var minBtn = document.getElementById('minBtn');
+    if (!contentEl) return;
+    if (contentEl.style.display === 'none') {
+        contentEl.style.display = 'block';
+        renderDebugLogs();
+        if (minBtn) minBtn.textContent = '缩小';
+    } else {
+        contentEl.style.display = 'none';
+        if (title) title.textContent = '调试日志 (' + debugLogs.length + ') 条';
+        if (minBtn) minBtn.textContent = '展开';
+    }
+}
+
+function copyDebugLog() {
+    var text = debugLogs.map(function(e) { 
+        return '[' + e.time + '][' + e.level + '] ' + e.msg; 
+    }).join('\n');
+    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Clipboard) {
+        Capacitor.Plugins.Clipboard.write({ string: text }).then(function() {
+            showToast('日志已复制', 1500);
+        }).catch(function() { fallbackCopy(text); });
+    } else {
+        fallbackCopy(text);
+    }
+}
+function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); showToast('日志已复制', 1500); } 
+    catch(e) { showToast('复制失败', 1500); }
+    document.body.removeChild(ta);
+}
+function clearDebugLog() {
+    debugLogs = [];
+    var contentEl = document.getElementById('debugContent');
+    if (contentEl) contentEl.innerHTML = '';
+    var title = document.getElementById('debugTitle');
+    if (title) title.textContent = '调试日志 (0)';
+    showToast('日志已清空', 1000);
+}
+function closeDebugBox() {
+    var dbg = document.getElementById('debugBox');
+    if (dbg) dbg.style.display = 'none';
+}
+
+// 网络请求拦截 - 记录所有XHR
+(function() {
+    var origOpen = XMLHttpRequest.prototype.open;
+    var origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(method, url) {
+        this._debugMethod = method;
+        this._debugUrl = url;
+        this._debugStartTime = Date.now();
+        return origOpen.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function(body) {
+        var self = this;
+        var url = this._debugUrl || '';
+        if (url.indexOf('ai_edit') > -1 || url.indexOf('api_ai') > -1 || url.indexOf('check') > -1) {
+            debugLog('请求: ' + (this._debugMethod || 'GET') + ' ' + url.substring(0,80), 'NETWORK');
+            if (body && typeof body === 'string' && body.length < 200) {
+                debugLog('参数: ' + body.substring(0,150), 'NETWORK');
+            }
+        }
+        this.addEventListener('load', function() {
+            var elapsed = Date.now() - self._debugStartTime;
+            if (url.indexOf('ai_edit') > -1 || url.indexOf('api_ai') > -1 || url.indexOf('check') > -1) {
+                var resp = self.responseText || '';
+                debugLog('响应: ' + self.status + ' ' + elapsed + 'ms ' + resp.substring(0,120), 'NETWORK');
+            }
+        });
+        this.addEventListener('error', function() {
+            var elapsed = Date.now() - self._debugStartTime;
+            if (url.indexOf('ai_edit') > -1 || url.indexOf('api_ai') > -1) {
+                debugLog('请求失败: ' + url.substring(0,60) + ' ' + elapsed + 'ms', 'ERROR');
+            }
+        });
+        return origSend.apply(this, arguments);
+    };
+})();
+
+// 生命周期监听
+document.addEventListener('visibilitychange', function() {
+    debugLog('页面状态: ' + (document.hidden ? '进入后台' : '回到前台'), 'LIFECYCLE');
+    if (document.hidden && isGenerating) {
+        wasInBackgroundDuringGeneration = true;
+        debugLog('生成中进入后台，标记wasInBackgroundDuringGeneration=true', 'INFO');
+    }
+});
+window.addEventListener('pageshow', function(e) {
+    debugLog('pageshow: persisted=' + e.persisted, 'LIFECYCLE');
+});
+window.addEventListener('pagehide', function() {
+    debugLog('pagehide: 页面即将隐藏', 'LIFECYCLE');
+});
+window.addEventListener('online', function() {
+    debugLog('网络状态: 在线', 'LIFECYCLE');
+});
+window.addEventListener('offline', function() {
+    debugLog('网络状态: 离线', 'LIFECYCLE');
+});
+
+// 记录用户操作
+document.addEventListener('click', function(e) {
+    var target = e.target;
+    var tag = target.tagName;
+    var text = (target.textContent || '').trim().substring(0,20);
+    var id = target.id || '';
+    if (tag === 'BUTTON' || target.closest('button') || tag === 'A' || target.closest('a')) {
+        var btn = target.closest('button') || target.closest('a') || target;
+        var btnText = (btn.textContent || '').trim().substring(0,20);
+        debugLog('点击: ' + btn.tagName + ' "' + btnText + '"' + (btn.id ? ' id=' + btn.id : ''), 'ACTION');
+    }
+}, true);
+
+// 连续点击标题5次切换调试模式
+var titleClickCount = 0;
+var titleClickTimer = null;
+document.addEventListener('DOMContentLoaded', function() {
+    debugLog('=== App 启动 ===', 'LIFECYCLE');
+    debugLog('设备: ' + (navigator.userAgent || 'unknown').substring(0,100), 'LIFECYCLE');
+    debugLog('平台: ' + (window.Capacitor ? 'Capacitor原生' : '浏览器'), 'LIFECYCLE');
+    if (window.Capacitor && Capacitor.Plugins) {
+        debugLog('已加载插件: ' + Object.keys(Capacitor.Plugins).join(', '), 'LIFECYCLE');
+    }
+    // 请求通知权限
+    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Notifier) {
+        Capacitor.Plugins.Notifier.requestPermission().catch(function() {});
+    }
+    
+    // 调试框拖动功能 - window捕获模式，彻底解决事件冲突
+    (function() {
+        var header = document.getElementById('debugHeader');
+        var dbg = document.getElementById('debugBox');
+        if (!header || !dbg) return;
+        var isDragging = false, startX, startY, startTop, startLeft, fixedWidth;
+        header.addEventListener('pointerdown', function(e) {
+            if (e.target.closest && e.target.closest('.debug-btn')) return;
+            e.stopImmediatePropagation();
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            var rect = dbg.getBoundingClientRect();
+            startTop = rect.top;
+            startLeft = rect.left;
+            fixedWidth = rect.width;
+            dbg.style.width = fixedWidth + 'px';
+            dbg.style.right = 'auto';
+            e.preventDefault();
+        });
+        window.addEventListener('pointermove', function(e) {
+            if (!isDragging) return;
+            e.stopImmediatePropagation();
+            var dx = e.clientX - startX;
+            var dy = e.clientY - startY;
+            var newLeft = startLeft + dx;
+            var newTop = startTop + dy;
+            var maxLeft = window.innerWidth - fixedWidth;
+            if (newLeft < 0) newLeft = 0;
+            if (newLeft > maxLeft) newLeft = maxLeft;
+            if (newTop < 0) newTop = 0;
+            dbg.style.top = newTop + 'px';
+            dbg.style.left = newLeft + 'px';
+            e.preventDefault();
+        }, true);
+        window.addEventListener('pointerup', function(e) {
+            if (isDragging) { e.stopImmediatePropagation(); }
+            isDragging = false;
+        }, true);
+        window.addEventListener('pointercancel', function() { isDragging = false; }, true);
+    })();
+
+    // 点击"换背景"10次触发调试模式
+    var presetChips = document.querySelectorAll('.chip');
+    var bgClickCount = 0;
+    var bgClickTimer = null;
+    presetChips.forEach(function(chip) {
+        if (chip.textContent.indexOf('换背景') !== -1) {
+            chip.addEventListener('click', function() {
+                bgClickCount++;
+                clearTimeout(bgClickTimer);
+                bgClickTimer = setTimeout(function() { bgClickCount = 0; }, 2000);
+                if (bgClickCount >= 10) {
+                    bgClickCount = 0;
+                    DEBUG_MODE = !DEBUG_MODE;
+                    showToast(DEBUG_MODE ? '调试模式已开启' : '调试模式已关闭');
+                    if (DEBUG_MODE) {
+                        createDebugBox();
+                    } else {
+                        var dbg = document.getElementById('debugBox');
+                        if (dbg) dbg.style.display = 'none';
+                    }
+                }
+            });
+        }
+    });
+});
+
+function resetUI() {
+    document.getElementById('loadingCard').classList.remove('show');
+    document.getElementById('inputCard').style.display = 'block';
+    document.getElementById('generateBtn').style.display = 'block';
+    if (selectedFile) {
+        document.getElementById('previewCard').classList.add('show');
+    } else {
+        document.getElementById('uploadCard').style.display = 'flex';
+    }
+}
+
+function showAuthModal() {
+    document.getElementById('authCode').textContent = getDeviceCode();
+    document.getElementById('authModal').classList.add('show');
+}
+function closeAuthModal() { document.getElementById('authModal').classList.remove('show'); }
+function copyAuthCode() {
+    var code = document.getElementById('authCode').textContent;
+    if (navigator.clipboard) { navigator.clipboard.writeText(code); showToast('已复制'); }
+    else { showToast('请长按复制'); }
+}
+function showBanModal(reason) {
+    document.getElementById('banReason').textContent = reason || '违反使用规则';
+    document.getElementById('banModal').classList.add('show');
+}
+function closeBanModal() { document.getElementById('banModal').classList.remove('show'); }
+
+var resultShown = false;
+function showResult(url) {
+    if (resultShown) { try { debugLog('showResult被重复调用，忽略', 'WARN'); } catch(e){} return; }
+    resultShown = true;
+    // 停止原生后台轮询
+    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.BackgroundAudio) {
+        Capacitor.Plugins.BackgroundAudio.stopPolling().catch(function() {});
+        debugLog('已停止原生后台轮询', 'INFO');
+    }
+    stopBackgroundAudio();
+    resultImageUrl = url;
+    lastPrompt = document.getElementById('promptInput').value.trim();
+    
+    // 生成完成发送通知（如果生成过程中曾经在后台）
+    if ((document.hidden || wasInBackgroundDuringGeneration) && window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Notifier) {
+        debugLog('发送生成完成通知 (document.hidden=' + document.hidden + ', wasInBackground=' + wasInBackgroundDuringGeneration + ')', 'INFO');
+        Capacitor.Plugins.Notifier.sendNotification({
+            title: '图生万物',
+            body: '图片生成已完成，点击查看'
+        }).then(function() {
+            debugLog('通知发送成功', 'SUCCESS');
+        }).catch(function(e) {
+            debugLog('通知发送失败: ' + JSON.stringify(e), 'ERROR');
+        });
+    }
+    
+    // 在生成中页面就把图片渲染好，然后直接显示结果页
+    setLoading('正在加载结果...', '');
+    
+    var afterImg = document.getElementById('resultAfter');
+    var beforeImg = document.getElementById('resultBefore');
+    var slider = document.getElementById('resultSlider');
+    
+    // 先设置 before 图片（原图）
+    if (originalImageData) {
+        beforeImg.src = originalImageData;
+    }
+    
+    // 设置 after 图片，等它加载渲染完成后再显示结果页
+    afterImg.style.opacity = '1';
+    afterImg.onload = function() {
+        // 图片渲染完成，显示结果页
+        document.getElementById('loadingCard').classList.remove('show');
+        document.getElementById('resultCard').classList.add('show');
+        
+        // 初始化滑块位置
+        document.getElementById('resultBeforeWrap').style.width = '50%';
+        document.getElementById('resultHandle').style.left = '50%';
+        
+        // 确保 before 图片宽度正确
+        if (slider && beforeImg) {
+            beforeImg.style.width = slider.offsetWidth + 'px';
+            setTimeout(function() {
+                beforeImg.style.width = slider.offsetWidth + 'px';
+            }, 100);
+        }
+        initSlider();
+        
+        var elapsed = Math.round((Date.now()-generationStartTime)/1000);
+        showToast('生成完成，用时 ' + elapsed + ' 秒', 2500);
+    };
+    // 重置后台标记
+    wasInBackgroundDuringGeneration = false;
+    
+    afterImg.onerror = function() {
+        // 图片加载失败，仍然显示结果页
+        document.getElementById('loadingCard').classList.remove('show');
+        document.getElementById('resultCard').classList.add('show');
+        showToast('图片加载较慢，请稍候', 2500);
+        document.getElementById('resultBeforeWrap').style.width = '50%';
+        document.getElementById('resultHandle').style.left = '50%';
+        if (slider && beforeImg) {
+            setTimeout(function() { beforeImg.style.width = slider.offsetWidth + 'px'; }, 100);
+        }
+        initSlider();
+    };
+    afterImg.src = url;
+    var preloadImg = new Image();
+    preloadImg.onload = function() {
+        // 图片加载完成，显示结果页
+        document.getElementById('loadingCard').classList.remove('show');
+        document.getElementById('resultCard').classList.add('show');
+        initSlider();
+    };
+    preloadImg.onerror = function() {
+        // 图片加载失败，仍然显示结果页
+        setTimeout(function() {
+            document.getElementById('loadingCard').classList.remove('show');
+            document.getElementById('resultCard').classList.add('show');
+            var afterImg = document.getElementById('resultAfter');
+            var beforeImg = document.getElementById('resultBefore');
+            afterImg.src = url;
+            if (originalImageData) beforeImg.src = originalImageData;
+            showToast('图片加载较慢，请稍候', 2500);
+            document.getElementById('resultBeforeWrap').style.width = '50%';
+            document.getElementById('resultHandle').style.left = '50%';
+            var slider = document.getElementById('resultSlider');
+            if (slider && beforeImg) {
+                setTimeout(function() { beforeImg.style.width = slider.offsetWidth + 'px'; }, 100);
+            }
+            initSlider();
+        }, 1000);
+    };
+    preloadImg.src = url;
+}
+
+var isDragging = false;
+function initSlider() {
+    var slider = document.getElementById('resultSlider');
+    var beforeWrap = document.getElementById('resultBeforeWrap');
+    var handle = document.getElementById('resultHandle');
+    if (!slider || !beforeWrap || !handle) return;
+
+    function updateSlider(clientX) {
+        var rect = slider.getBoundingClientRect();
+        var percent = ((clientX - rect.left) / rect.width) * 100;
+        percent = Math.max(0, Math.min(100, percent));
+        beforeWrap.style.width = percent + '%';
+        handle.style.left = percent + '%';
+        var beforeImg = document.getElementById('resultBefore');
+        if (beforeImg) beforeImg.style.width = rect.width + 'px';
+    }
+
+    slider.addEventListener('touchstart', function(e) {
+        isDragging = true;
+        updateSlider(e.touches[0].clientX);
+        e.preventDefault();
+    }, { passive: false });
+
+    slider.addEventListener('touchmove', function(e) {
+        if (isDragging) {
+            updateSlider(e.touches[0].clientX);
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+    slider.addEventListener('touchend', function() { isDragging = false; });
+
+    slider.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        updateSlider(e.clientX);
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (isDragging) updateSlider(e.clientX);
+    });
+
+    document.addEventListener('mouseup', function() { isDragging = false; });
+}
+
+function downloadResult() {
+    if (resultImageUrl) { window.open(resultImageUrl); showToast('已开始下载'); }
+}
+
+
+// 后台音频保活
+function startBackgroundAudio() {
+    try {
+        if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.BackgroundAudio) {
+            Capacitor.Plugins.BackgroundAudio.start();
+            debugLog('后台音频保活已启动');
+        }
+    } catch(e) { debugLog('启动后台音频失败: ' + e.message); }
+}
+function stopBackgroundAudio() {
+    try {
+        if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.BackgroundAudio) {
+            Capacitor.Plugins.BackgroundAudio.stop();
+            debugLog('后台音频保活已停止');
+        }
+    } catch(e) { debugLog('停止后台音频失败: ' + e.message); }
+}
+
+// 保存到相册
+function saveToAlbum() {
+    if (!resultImageUrl) { showToast('没有可保存的图片'); return; }
+    showToast('正在保存...', 1500);
+    
+    debugLog('保存图片: ' + resultImageUrl);
+    debugLog('Capacitor: ' + (window.Capacitor ? '存在' : '不存在'));
+    if (window.Capacitor && Capacitor.Plugins) {
+        debugLog('PhotoSaver: ' + (Capacitor.Plugins.PhotoSaver ? '存在' : '不存在'));
+        debugLog('所有插件: ' + Object.keys(Capacitor.Plugins).join(', '));
+    }
+    
+    // 优先用 PhotoSaver 原生下载并保存
+    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.PhotoSaver) {
+        Capacitor.Plugins.PhotoSaver.saveImageFromUrl({ url: resultImageUrl })
+            .then(function(res) {
+                debugLog('保存成功: ' + JSON.stringify(res));
+                showToast('已保存到相册', 2000);
+            })
+            .catch(function(err) {
+                debugLog('保存失败: ' + JSON.stringify(err));
+                showToast('保存失败: ' + (err.message || JSON.stringify(err)), 3000);
+            });
+        return;
+    }
+    showToast('插件未加载，请开启调试模式查看', 3000);
+    
+    // 降级：用 XHR 下载
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', resultImageUrl, true);
+    xhr.responseType = 'blob';
+    xhr.timeout = 30000;
+    xhr.onload = function() {
+        if (xhr.status !== 200) { fallbackSave(); return; }
+        var blob = xhr.response;
+        var reader = new FileReader();
+        reader.onloadend = function() {
+            var base64 = reader.result;
+            if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.PhotoSaver) {
+                Capacitor.Plugins.PhotoSaver.saveImage({ base64: base64 })
+                    .then(function() { showToast('已保存到相册', 2000); })
+                    .catch(function(err) { showToast('保存失败: ' + (err.message || err), 3000); });
+            } else {
+                fallbackSave();
+            }
+        };
+        reader.readAsDataURL(blob);
+    };
+    xhr.onerror = function() { fallbackSave(); };
+    xhr.ontimeout = function() { fallbackSave(); };
+    xhr.send();
+    
+    function fallbackSave() {
+        window.open(resultImageUrl);
+        showToast('长按图片保存', 2000);
+    }
+}
+
+// 继续创作（保留图片和提示词）
+function continueCreate() {
+    document.getElementById('resultCard').classList.remove('show');
+    document.getElementById('uploadCard').style.display = 'none';
+    document.getElementById('previewCard').classList.add('show');
+    document.getElementById('inputCard').style.display = 'block';
+    document.getElementById('generateBtn').style.display = 'block';
+    
+    // 恢复原图和提示词
+    if (originalImageData) {
+        document.getElementById('previewImg').src = originalImageData;
+    }
+    if (lastPrompt) {
+        document.getElementById('promptInput').value = lastPrompt;
+    }
+    
+    // 切换到创作 tab
+    switchTab('create');
+    showToast('已保留图片和提示词', 1500);
+}
+
+function resetAll() {
+    selectedFile = null;
+    fileInput.value = '';
+    document.getElementById('promptInput').value = '';
+    document.getElementById('resultCard').classList.remove('show');
+    document.getElementById('inputCard').style.display = 'block';
+    document.getElementById('generateBtn').style.display = 'block';
+    document.getElementById('uploadCard').style.display = 'flex';
+}
+
+function loadHistory() {
+    var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
+    var grid = document.getElementById('historyGrid');
+    grid.innerHTML = '';
+    if (hist.length === 0) {
+        grid.innerHTML = '<div class="history-empty">还没有历史记录<br>去创作一张吧</div>';
+        return;
+    }
+    hist.forEach(function(item, idx) {
+        var div = document.createElement('div');
+        div.className = 'history-item';
+        div.onclick = function(){ openHistory(idx); };
+        var img = document.createElement('img');
+        img.src = item.imagePath || '';
+        div.appendChild(img);
+        grid.appendChild(div);
+    });
+}
+
+function openHistory(idx) {
+    var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
+    if (!hist[idx]) return;
+    currentHistoryIndex = idx;
+    document.getElementById('modalImg').src = hist[idx].imagePath || '';
+    document.getElementById('modalPrompt').textContent = hist[idx].prompt || '无描述';
+    document.getElementById('modalOverlay').classList.add('show');
+}
+
+function closeModal() { document.getElementById('modalOverlay').classList.remove('show'); }
+function saveFromHistory() {
+    var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
+    if (hist[currentHistoryIndex]) { window.open(hist[currentHistoryIndex].imagePath); showToast('已下载'); }
+}
+function deleteFromHistory() {
+    var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
+    hist.splice(currentHistoryIndex, 1);
+    localStorage.setItem('edit_history', JSON.stringify(hist));
+    closeModal();
+    loadHistory();
+    showToast('已删除');
+}
+
+// 从历史记录继续创作
+function continueFromHistory() {
+    var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
+    var item = hist[currentHistoryIndex];
+    if (!item) { showToast('记录不存在'); return; }
+    
+    closeModal();
+    showToast('正在加载图片...', 1500);
+    
+    // 下载图片转成 File
+    fetch(item.imagePath)
+        .then(function(res) { return res.blob(); })
+        .then(function(blob) {
+            var file = new File([blob], 'history_' + Date.now() + '.png', { type: 'image/png' });
+            selectedFile = file;
+            
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                originalImageData = e.target.result;
+                document.getElementById('previewImg').src = e.target.result;
+                document.getElementById('uploadCard').style.display = 'none';
+                document.getElementById('previewCard').classList.add('show');
+                document.getElementById('inputCard').style.display = 'block';
+                document.getElementById('generateBtn').style.display = 'block';
+                document.getElementById('promptInput').value = item.prompt || '';
+                lastPrompt = item.prompt || '';
+                switchTab('create');
+                showToast('已加载图片和提示词', 1500);
+            };
+            reader.readAsDataURL(file);
+        })
+        .catch(function() {
+            showToast('图片加载失败', 2000);
+        });
+}
+
+function clearHistory() {
+    showConfirm('确定清空所有历史记录吗？', function(){
+        localStorage.removeItem('edit_history');
+        loadHistory();
+        showToast('已清空');
+    });
+}
+
+var confirmCb = null;
+function showConfirm(text, cb) {
+    document.getElementById('confirmText').textContent = text;
+    confirmCb = cb;
+    document.getElementById('confirmOverlay').classList.add('show');
+}
+function closeConfirm() {
+    document.getElementById('confirmOverlay').classList.remove('show');
+    confirmCb = null;
+}
+document.getElementById('confirmOkBtn').onclick = function() {
+    if (confirmCb) confirmCb();
+    closeConfirm();
+};
+
+function agreeDisclaimer() { document.getElementById('disclaimerModal').classList.remove('show'); }
+function disagreeDisclaimer() {
+    if (confirm('确定退出吗？')) window.close();
+}
+
+window.addEventListener('load', function() {
+    debugLog('window load 触发，页面完全加载', 'LIFECYCLE');
+    // 延迟检查授权，确保所有资源加载完成
+    setTimeout(function() {
+        debugLog('开始启动流程...', 'LIFECYCLE');
+    }, 100);
+    document.getElementById('disclaimerModal').classList.add('show');
+    checkServerConfig();
+});
+
+function versionCompare(v1, v2) {
+    var a = v1.split('.').map(Number);
+    var b = v2.split('.').map(Number);
+    for (var i = 0; i < Math.max(a.length, b.length); i++) {
+        var n1 = a[i] || 0, n2 = b[i] || 0;
+        if (n1 > n2) return 1;
+        if (n1 < n2) return -1;
+    }
+    return 0;
+}
+
+async function checkServerConfig() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', API_BASE + '/ai_edit.php?action=config', true);
+    xhr.timeout = 10000;
+    await addSigToXhr(xhr, { action: 'config' });
+    xhr.onload = function() {
+        try {
+            var cfg = JSON.parse(xhr.responseText);
+            if (cfg.kill_switch) {
+                document.body.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999999;"><div style="font-size:60px;margin-bottom:20px;">🔧</div><div style="color:#fff;font-size:20px;font-weight:600;margin-bottom:10px;">应用维护中</div><div style="color:#888;font-size:14px;text-align:center;padding:0 40px;">应用暂时无法使用，请稍后再试。</div></div>';
+                return;
+            }
+            if (cfg.generation_disabled) {
+                var btn = document.getElementById('generateBtn');
+                if (btn) { btn.disabled = true; btn.textContent = '生成已暂停'; btn.style.opacity = '0.5'; }
+            }
+            if (cfg.min_version && versionCompare(APP_VERSION, cfg.min_version) < 0) {
+                showUpdateModal(cfg.update_url || '');
+                return;
+            }
+            if (cfg.announcement) {
+                showAnnouncementModal(cfg.announcement);
+            }
+        } catch(e) { console.log('配置解析失败'); }
+    };
+    xhr.onerror = function() { console.log('配置获取失败'); };
+    xhr.ontimeout = function() { console.log('配置获取超时'); };
+    xhr.send();
+}
+
+function showAnnouncementModal(text) {
+    var modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    modal.innerHTML = '<div style="background:#fff;border-radius:16px;padding:24px;max-width:320px;width:100%;"><h3 style="margin:0 0 12px;font-size:18px;">公告</h3><p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#333;white-space:pre-wrap;">' + text + '</p><button id="annCloseBtn" style="width:100%;padding:12px;background:#007AFF;color:#fff;border:none;border-radius:10px;font-size:16px;">我知道了</button></div>';
+    document.body.appendChild(modal);
+    document.getElementById('annCloseBtn').onclick = function() { document.body.removeChild(modal); };
+}
+
+function showUpdateModal(url) {
+    var modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    modal.innerHTML = '<div style="background:#fff;border-radius:16px;padding:24px;max-width:320px;width:100%;"><h3 style="margin:0 0 12px;font-size:18px;">发现新版本</h3><p style="margin:0 0 20px;font-size:15px;color:#333;">当前版本过低，请更新后使用</p><button id="updateBtn" style="width:100%;padding:12px;background:#007AFF;color:#fff;border:none;border-radius:10px;font-size:16px;">立即更新</button></div>';
+    document.body.appendChild(modal);
+    document.getElementById('updateBtn').onclick = function() {
+        if (url) { window.open(url); }
+        else { showToast('请联系管理员获取更新', 2000); }
+    };
+}
+</script>
+
+
+
+<!-- 调试框 - 预先写死结构，内联onclick绑定，避免动态创建的事件问题 -->
+<div id="debugBox" style="display:none;position:fixed;top:80px;left:10px;right:10px;z-index:2147483647;">
+    <div id="debugHeader" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(30,30,40,0.97);border-bottom:1px solid rgba(255,255,255,0.15);touch-action:none;user-select:none;-webkit-user-select:none;">
+        <span id="debugTitle" style="color:#4fc3f7;font-weight:bold;font-size:12px;flex:1;">调试日志 (0)</span>
+        <div style="display:flex;gap:6px;">
+            <div class="debug-btn" onclick="copyDebugLog()" style="padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;touch-action:manipulation;cursor:pointer;">复制</div>
+            <div class="debug-btn" onclick="clearDebugLog()" style="padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;touch-action:manipulation;cursor:pointer;">清空</div>
+            <div id="minBtn" class="debug-btn" onclick="minimizeDebugBox()" style="padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;touch-action:manipulation;cursor:pointer;">缩小</div>
+            <div class="debug-btn" onclick="closeDebugBox()" style="padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;touch-action:manipulation;cursor:pointer;">关闭</div>
+        </div>
+    </div>
+    <div id="debugContent" style="padding:8px 12px;max-height:250px;overflow-y:auto;background:rgba(20,20,30,0.97);font-size:11px;line-height:1.6;"></div>
+</div>
+
+</body>
+</html>
+
+
