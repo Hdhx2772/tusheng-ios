@@ -59,11 +59,22 @@ public class PhotoSaver: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func saveImageToAlbum(image: UIImage, call: CAPPluginCall) {
-        PHPhotoLibrary.requestAuthorization { [weak self] status in
-            if status == .authorized {
-                UIImageWriteToSavedPhotosAlbum(image, self, #selector(self?.imageSaved(_:didFinishSavingWithError:contextInfo:)), nil)
-            } else {
-                call.reject("没有相册权限，请在设置中开启")
+        // iOS 14+ 使用新 API，旧版本回退
+        if #available(iOS 14.0, *) {
+            PHPhotoLibrary.requestAuthorization(for: .addOnly) { [weak self] status in
+                if status == .authorized || status == .limited {
+                    UIImageWriteToSavedPhotosAlbum(image, self, #selector(self?.imageSaved(_:didFinishSavingWithError:contextInfo:)), nil)
+                } else {
+                    call.reject("没有相册权限，请在设置中开启")
+                }
+            }
+        } else {
+            PHPhotoLibrary.requestAuthorization { [weak self] status in
+                if status == .authorized {
+                    UIImageWriteToSavedPhotosAlbum(image, self, #selector(self?.imageSaved(_:didFinishSavingWithError:contextInfo:)), nil)
+                } else {
+                    call.reject("没有相册权限，请在设置中开启")
+                }
             }
         }
     }

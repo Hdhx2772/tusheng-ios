@@ -3,6 +3,65 @@ import Capacitor
 import AVFoundation
 import UserNotifications
 import CryptoKit
+import CommonCrypto
+
+// SSL Pinning URLSession Delegate
+class SSLPinningSessionDelegate: NSObject, URLSessionDelegate {
+    private let pinnedHosts: Set<String> = ["wutong.xyz", "www.wutong.xyz"]
+    private let pinnedPublicKeyHashes: Set<String> = [
+        "0N5PsYbLsX3MHFyWp0KwqcgC++uJ9Brzwv3yphZzpTo="
+    ]
+    
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        
+        let host = challenge.protectionSpace.host
+        guard pinnedHosts.contains(host) else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        
+        guard let serverTrust = challenge.protectionSpace.serverTrust else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+        
+        let policy = SecPolicyCreateSSL(true, host as CFString)
+        SecTrustSetPolicies(serverTrust, policy)
+        
+        var error: CFError?
+        guard SecTrustEvaluateWithError(serverTrust, &error) else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+        
+        let certificates: [SecCertificate]
+        if #available(iOS 15.0, *) {
+            certificates = (SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate]) ?? []
+        } else {
+            let count = SecTrustGetCertificateCount(serverTrust)
+            certificates = (0..<count).compactMap { SecTrustGetCertificateAtIndex(serverTrust, $0) }
+        }
+        
+        for cert in certificates {
+            if let publicKey = SecCertificateCopyKey(cert),
+               let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, nil) as Data? {
+                let hash = SHA256.hash(data: publicKeyData)
+                let hashBase64 = Data(hash).base64EncodedString()
+                if pinnedPublicKeyHashes.contains(hashBase64) {
+                    completionHandler(.useCredential, URLCredential(trust: serverTrust))
+                    return
+                }
+            }
+        }
+        
+        completionHandler(.cancelAuthenticationChallenge, nil)
+    }
+}
 
 @objc(BackgroundAudio)
 public class BackgroundAudio: CAPPlugin, CAPBridgedPlugin {
@@ -21,6 +80,14 @@ public class BackgroundAudio: CAPPlugin, CAPBridgedPlugin {
     private var pollingTask: URLSessionDataTask?
     private var isPolling = false
     private var pollCount = 0
+    
+    // 带 SSL Pinning 的 URLSession
+    private lazy var pinnedSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 60
+        return URLSession(configuration: config, delegate: SSLPinningSessionDelegate(), delegateQueue: nil)
+    }()
     
     @objc func start(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
@@ -138,7 +205,7 @@ public class BackgroundAudio: CAPPlugin, CAPBridgedPlugin {
         request.setValue(nonce, forHTTPHeaderField: "X-Auth-Nonce")
         request.setValue(signatureHex, forHTTPHeaderField: "X-Auth-Signature")
         
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        let task = pinnedSession.dataTask(with: request) { [weak self] data, response, error in
             guard let self = self else { return }
             guard self.isPolling else { return }
             
