@@ -100,7 +100,7 @@ struct AIChatView: View {
         VStack(spacing: 0) {
             Divider()
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("输入消息...", text: $viewModel.inputText, axis: .vertical)
+                TextField("输入消息...", text: $viewModel.inputText)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -109,7 +109,7 @@ struct AIChatView: View {
                             .fill(Color(.systemGray6))
                     )
                     .focused($isInputFocused)
-                    .lineLimit(1...5)
+                    .lineLimit(5)
                 
                 if viewModel.isLoading {
                     Button {
