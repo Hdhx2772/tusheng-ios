@@ -77,7 +77,7 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         // 注册 AI 对话插件（带错误捕获）
         do {
             let plugin = AIChatPlugin()
-            log("🔍 AIChatPlugin 实例创建成功: \(type(of: plugin))")
+            log("🔍 AIChatPlugin 实例创建成功: \(type(of: plugin)), id=\(plugin.id)")
             bridge.registerPluginInstance(plugin)
             log("✅ AIChatPlugin 已注册")
         } catch {

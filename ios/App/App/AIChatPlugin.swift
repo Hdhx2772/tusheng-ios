@@ -6,7 +6,13 @@ import SwiftUI
 @objc(AIChatPlugin)
 public class AIChatPlugin: CAPPlugin {
     
+    // 强制插件 id 为 AIChatPlugin，避免 NSStringFromClass 带模块名前缀导致 JS 端找不到
+    override public var id: String {
+        return "AIChatPlugin"
+    }
+    
     @objc func openChat(_ call: CAPPluginCall) {
+        NSLog("🔍 AIChatPlugin.openChat 被调用, 插件id=\(self.id)")
         NSLog("🔍 AIChatPlugin.openChat 被调用")
         DispatchQueue.main.async { [weak self] in
             guard let self = self else {
