@@ -692,16 +692,22 @@ function showTabBar() {
 
 // 打开原生 AI 对话界面
 function openAIChat() {
-    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.AIChatPlugin) {
-        Capacitor.Plugins.AIChatPlugin.openChat().then(function(res) {
-            debugLog('AI 对话已打开', 'INFO');
-        }).catch(function(err) {
-            debugLog('打开 AI 对话失败: ' + err.message, 'ERROR');
-            showToast('打开 AI 对话失败');
-        });
-    } else {
+    if (!window.Capacitor || !Capacitor.Plugins) {
         showToast('当前版本不支持 AI 对话');
+        return;
     }
+    var plugin = Capacitor.Plugins.AIChatPlugin || Capacitor.Plugins.AIChat;
+    if (!plugin) {
+        debugLog('可用插件: ' + Object.keys(Capacitor.Plugins).join(', '), 'ERROR');
+        showToast('当前版本不支持 AI 对话');
+        return;
+    }
+    plugin.openChat().then(function(res) {
+        debugLog('AI 对话已打开', 'INFO');
+    }).catch(function(err) {
+        debugLog('打开 AI 对话失败: ' + err.message, 'ERROR');
+        showToast('打开 AI 对话失败: ' + err.message);
+    });
 }
 async function submitEdit() {
     if (!selectedFile) { showToast('请先选择图片'); return; }
