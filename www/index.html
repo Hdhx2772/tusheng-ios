@@ -959,16 +959,26 @@ function debugLog(msg, level) {
         createDebugBox();
         dbg = document.getElementById('debugBox');
     }
-    var contentEl = dbg.querySelector('.debug-content');
+    var contentEl = document.getElementById('debugContent');
     if (contentEl) {
         var line = document.createElement('div');
-        line.className = 'log-line log-' + level;
-        line.innerHTML = '<span class="log-time">[' + time + ']</span>' + 
-                         '<span style="color:#888;margin-right:4px">[' + level + ']</span>' + 
-                         escapeHtml(String(msg));
+        line.style.cssText = 'margin-bottom:2px;word-break:break-all;';
+        var timeSpan = document.createElement('span');
+        timeSpan.style.cssText = 'color:#666;';
+        timeSpan.textContent = '[' + time + ']';
+        var levelSpan = document.createElement('span');
+        levelSpan.style.cssText = 'color:#888;margin:0 4px;';
+        levelSpan.textContent = '[' + level + ']';
+        var msgSpan = document.createElement('span');
+        if (level === 'ERROR') msgSpan.style.color = '#ff6b6b';
+        else if (level === 'SUCCESS') msgSpan.style.color = '#51cf66';
+        else msgSpan.style.color = '#ddd';
+        msgSpan.textContent = String(msg);
+        line.appendChild(timeSpan);
+        line.appendChild(levelSpan);
+        line.appendChild(msgSpan);
         contentEl.appendChild(line);
         contentEl.scrollTop = contentEl.scrollHeight;
-        // 限制DOM节点数
         while (contentEl.children.length > DEBUG_MAX_LINES) {
             contentEl.removeChild(contentEl.firstChild);
         }
@@ -984,78 +994,172 @@ function escapeHtml(str) {
 function createDebugBox() {
     var dbg = document.getElementById('debugBox');
     if (dbg) { dbg.style.display = 'block'; return; }
+    
     dbg = document.createElement('div');
     dbg.id = 'debugBox';
-    dbg.style.cssText = 'top:80px;left:10px;right:10px;display:block;z-index:99999;position:fixed;';
-    dbg.innerHTML = 
-        '<div class="debug-header" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(30,30,40,0.95);border-bottom:1px solid rgba(255,255,255,0.1);cursor:move;user-select:none;">' +
-        '  <span class="debug-title" style="color:#4fc3f7;font-weight:bold;font-size:12px;flex:1;">调试日志 (' + debugLogs.length + ')</span>' +
-        '  <div class="debug-actions" style="display:flex;gap:6px;">' +
-        '    <button class="debug-btn" style="padding:3px 10px;font-size:11px;border-radius:4px;background:rgba(255,255,255,0.1);color:#ddd;border:none;cursor:pointer;" onclick="copyDebugLog()">复制</button>' +
-        '    <button class="debug-btn" style="padding:3px 10px;font-size:11px;border-radius:4px;background:rgba(255,255,255,0.1);color:#ddd;border:none;cursor:pointer;" onclick="clearDebugLog()">清空</button>' +
-        '    <button class="debug-btn" id="minBtn" style="padding:3px 10px;font-size:11px;border-radius:4px;background:rgba(255,255,255,0.1);color:#ddd;border:none;cursor:pointer;" onclick="minimizeDebugBox()">缩小</button>' +
-        '    <button class="debug-btn" style="padding:3px 10px;font-size:11px;border-radius:4px;background:rgba(255,255,255,0.1);color:#ddd;border:none;cursor:pointer;" onclick="closeDebugBox()">关闭</button>' +
-        '  </div>' +
-        '</div>' +
-        '<div class="debug-content" style="padding:8px 12px;max-height:250px;overflow-y:auto;background:rgba(20,20,30,0.95);font-size:11px;line-height:1.6;"></div>';
-    document.body.appendChild(dbg);
+    dbg.style.cssText = 'position:fixed;top:80px;left:10px;right:10px;z-index:999999;display:block;';
     
-    // 拖动功能（支持触摸和鼠标）
-    var header = dbg.querySelector('.debug-header');
-    var isDragging = false, startX, startY, startTop, startLeft;
+    // 标题栏
+    var header = document.createElement('div');
+    header.id = 'debugHeader';
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(30,30,40,0.97);border-bottom:1px solid rgba(255,255,255,0.15);user-select:none;-webkit-user-select:none;touch-action:none;';
     
-    function onDragStart(clientX, clientY) {
-        isDragging = true;
-        startX = clientX; startY = clientY;
-        var rect = dbg.getBoundingClientRect();
-        startTop = rect.top; startLeft = rect.left;
+    var title = document.createElement('span');
+    title.id = 'debugTitle';
+    title.style.cssText = 'color:#4fc3f7;font-weight:bold;font-size:12px;flex:1;';
+    title.textContent = '调试日志 (' + debugLogs.length + ')';
+    
+    var actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:6px;';
+    
+    function makeBtn(text, onclick) {
+        var btn = document.createElement('button');
+        btn.textContent = text;
+        btn.style.cssText = 'padding:4px 10px;font-size:11px;border-radius:5px;background:rgba(255,255,255,0.15);color:#fff;border:none;cursor:pointer;';
+        btn.onclick = onclick;
+        return btn;
     }
-    function onDragMove(clientX, clientY) {
-        if (!isDragging) return;
-        var dx = clientX - startX;
-        var dy = clientY - startY;
-        dbg.style.top = Math.max(0, startTop + dy) + 'px';
-        dbg.style.left = Math.max(0, startLeft + dx) + 'px';
-        dbg.style.right = 'auto';
-    }
-    function onDragEnd() { isDragging = false; }
     
-    header.addEventListener('touchstart', function(e) {
-        if (e.target.tagName === 'BUTTON') return;
-        var touch = e.touches[0];
-        onDragStart(touch.clientX, touch.clientY);
-        e.preventDefault();
-    }, {passive: false});
-    header.addEventListener('touchmove', function(e) {
-        if (!isDragging) return;
-        var touch = e.touches[0];
-        onDragMove(touch.clientX, touch.clientY);
-        e.preventDefault();
-    }, {passive: false});
-    header.addEventListener('touchend', onDragEnd);
+    var copyBtn = makeBtn('复制', copyDebugLog);
+    var clearBtn = makeBtn('清空', clearDebugLog);
+    var minBtn = makeBtn('缩小', minimizeDebugBox);
+    minBtn.id = 'minBtn';
+    var closeBtn = makeBtn('关闭', closeDebugBox);
     
-    // 鼠标拖动（桌面调试用）
-    header.addEventListener('mousedown', function(e) {
-        if (e.target.tagName === 'BUTTON') return;
-        onDragStart(e.clientX, e.clientY);
-        e.preventDefault();
-    });
-    document.addEventListener('mousemove', function(e) {
-        onDragMove(e.clientX, e.clientY);
-    });
-    document.addEventListener('mouseup', onDragEnd);
+    actions.appendChild(copyBtn);
+    actions.appendChild(clearBtn);
+    actions.appendChild(minBtn);
+    actions.appendChild(closeBtn);
     
-    // 渲染已有日志
-    var contentEl = dbg.querySelector('.debug-content');
+    header.appendChild(title);
+    header.appendChild(actions);
+    dbg.appendChild(header);
+    
+    // 内容区
+    var contentEl = document.createElement('div');
+    contentEl.id = 'debugContent';
+    contentEl.style.cssText = 'padding:8px 12px;max-height:250px;overflow-y:auto;background:rgba(20,20,30,0.97);font-size:11px;line-height:1.6;';
+    
     debugLogs.forEach(function(entry) {
         var line = document.createElement('div');
-        line.className = 'log-line log-' + entry.level;
-        line.innerHTML = '<span class="log-time">[' + entry.time + ']</span>' + 
-                         '<span style="color:#888;margin-right:4px">[' + entry.level + ']</span>' + 
-                         escapeHtml(entry.msg);
+        line.style.cssText = 'margin-bottom:2px;word-break:break-all;';
+        var timeSpan = document.createElement('span');
+        timeSpan.style.cssText = 'color:#666;';
+        timeSpan.textContent = '[' + entry.time + ']';
+        var levelSpan = document.createElement('span');
+        levelSpan.style.cssText = 'color:#888;margin:0 4px;';
+        levelSpan.textContent = '[' + entry.level + ']';
+        var msgSpan = document.createElement('span');
+        if (entry.level === 'ERROR') msgSpan.style.color = '#ff6b6b';
+        else if (entry.level === 'SUCCESS') msgSpan.style.color = '#51cf66';
+        else msgSpan.style.color = '#ddd';
+        msgSpan.textContent = entry.msg;
+        line.appendChild(timeSpan);
+        line.appendChild(levelSpan);
+        line.appendChild(msgSpan);
         contentEl.appendChild(line);
     });
     contentEl.scrollTop = contentEl.scrollHeight;
+    
+    dbg.appendChild(contentEl);
+    document.body.appendChild(dbg);
+    
+    // 拖动功能
+    var isDragging = false, startX, startY, startTop, startLeft;
+    
+    header.addEventListener('touchstart', function(e) {
+        if (e.target.tagName === 'BUTTON') return;
+        isDragging = true;
+        var touch = e.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+        var rect = dbg.getBoundingClientRect();
+        startTop = rect.top;
+        startLeft = rect.left;
+    }, {passive: false});
+    
+    header.addEventListener('touchmove', function(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        var touch = e.touches[0];
+        var dx = touch.clientX - startX;
+        var dy = touch.clientY - startY;
+        dbg.style.top = Math.max(0, startTop + dy) + 'px';
+        dbg.style.left = Math.max(0, startLeft + dx) + 'px';
+        dbg.style.right = 'auto';
+    }, {passive: false});
+    
+    header.addEventListener('touchend', function() {
+        isDragging = false;
+    });
+    
+    // 鼠标拖动
+    header.addEventListener('mousedown', function(e) {
+        if (e.target.tagName === 'BUTTON') return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        var rect = dbg.getBoundingClientRect();
+        startTop = rect.top;
+        startLeft = rect.left;
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        var dx = e.clientX - startX;
+        var dy = e.clientY - startY;
+        dbg.style.top = Math.max(0, startTop + dy) + 'px';
+        dbg.style.left = Math.max(0, startLeft + dx) + 'px';
+        dbg.style.right = 'auto';
+    });
+    document.addEventListener('mouseup', function() {
+        isDragging = false;
+    });
+}
+
+function minimizeDebugBox() {
+    var dbg = document.getElementById('debugBox');
+    if (!dbg) return;
+    var contentEl = document.getElementById('debugContent');
+    var title = document.getElementById('debugTitle');
+    var minBtn = document.getElementById('minBtn');
+    
+    if (contentEl) {
+        // 缩小：直接移除内容区
+        contentEl.remove();
+        title.textContent = '调试日志 (' + debugLogs.length + ') 条';
+        if (minBtn) minBtn.textContent = '展开';
+    } else {
+        // 展开：重新创建内容区
+        contentEl = document.createElement('div');
+        contentEl.id = 'debugContent';
+        contentEl.style.cssText = 'padding:8px 12px;max-height:250px;overflow-y:auto;background:rgba(20,20,30,0.97);font-size:11px;line-height:1.6;';
+        
+        debugLogs.forEach(function(entry) {
+            var line = document.createElement('div');
+            line.style.cssText = 'margin-bottom:2px;word-break:break-all;';
+            var timeSpan = document.createElement('span');
+            timeSpan.style.cssText = 'color:#666;';
+            timeSpan.textContent = '[' + entry.time + ']';
+            var levelSpan = document.createElement('span');
+            levelSpan.style.cssText = 'color:#888;margin:0 4px;';
+            levelSpan.textContent = '[' + entry.level + ']';
+            var msgSpan = document.createElement('span');
+            if (entry.level === 'ERROR') msgSpan.style.color = '#ff6b6b';
+            else if (entry.level === 'SUCCESS') msgSpan.style.color = '#51cf66';
+            else msgSpan.style.color = '#ddd';
+            msgSpan.textContent = entry.msg;
+            line.appendChild(timeSpan);
+            line.appendChild(levelSpan);
+            line.appendChild(msgSpan);
+            contentEl.appendChild(line);
+        });
+        contentEl.scrollTop = contentEl.scrollHeight;
+        
+        dbg.appendChild(contentEl);
+        title.textContent = '调试日志 (' + debugLogs.length + ')';
+        if (minBtn) minBtn.textContent = '缩小';
+    }
 }
 
 function minimizeDebugBox() {
