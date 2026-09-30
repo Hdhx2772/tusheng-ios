@@ -237,13 +237,12 @@ body {
 }
 /* 调试框 - 增强版 */
 #debugBox {
-    position: fixed; z-index: 999999;
+    position: fixed; z-index: 2147483647 !important;
     background: rgba(10,10,15,0.95); color: #ddd;
     border-radius: 10px; border: 1px solid rgba(255,255,255,0.15);
     box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     font-family: 'SF Mono', Menlo, monospace; font-size: 10px;
     overflow: hidden; display: none;
-    touch-action: none;
 }
 #debugBox .debug-header {
     padding: 6px 10px; background: rgba(40,40,50,0.9);
@@ -744,15 +743,10 @@ async function doGenerate(prompt) {
     xhrUpload.open('POST', API_BASE + '/ai_edit.php', true);
     xhrUpload.timeout = 120000;
     await addSigToXhr(xhrUpload, { action: 'upload', prompt: prompt });
-    var lastUploadPct = -1;
     xhrUpload.upload.onprogress = function(e) {
         if (e.lengthComputable) {
             var pct = Math.round(e.loaded / e.total * 100);
-            setLoading('正在上传图片... ' + pct + '%', '');
-            if (pct !== lastUploadPct && (pct % 10 === 0 || pct === 100)) {
-                lastUploadPct = pct;
-                debugLog('正在上传图片... ' + pct + '%');
-            }
+            debugLog('上传进度: ' + pct + '%');
         }
     };
     xhrUpload.onload = function() {
@@ -1067,8 +1061,10 @@ function fallbackCopy(text) {
 }
 function clearDebugLog() {
     debugLogs = [];
-    var contentEl = document.querySelector('#debugBox .debug-content');
+    var contentEl = document.getElementById('debugContent');
     if (contentEl) contentEl.innerHTML = '';
+    var title = document.getElementById('debugTitle');
+    if (title) title.textContent = '调试日志 (0)';
     showToast('日志已清空', 1000);
 }
 function closeDebugBox() {
@@ -1168,6 +1164,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var isDragging = false, startX, startY, startTop, startLeft;
         header.addEventListener('pointerdown', function(e) {
             if (e.target.closest && e.target.closest('.debug-btn')) return;
+            e.stopPropagation();
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
