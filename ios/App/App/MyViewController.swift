@@ -86,12 +86,22 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         
         log("✅ 所有自定义插件注册完成")
         
-        // 在 JS 端手动注册 AIChatPlugin 代理（Capacitor 需要显式 registerPlugin 才会出现在 Capacitor.Plugins 中）
+        // 在 JS 端手动注册 AIChatPlugin（需要先添加 PluginHeaders 声明原生方法，再 registerPlugin）
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.bridge?.webView?.evaluateJavaScript("""
             (function() {
                 try {
-                    if (window.Capacitor && Capacitor.registerPlugin && !Capacitor.Plugins.AIChatPlugin) {
+                    if (!window.Capacitor) return;
+                    // 1. 先添加 PluginHeaders，声明原生方法列表（openChat 返回 promise）
+                    if (!Capacitor.PluginHeaders) Capacitor.PluginHeaders = [];
+                    if (!Capacitor.PluginHeaders.find(function(p){return p.name==='AIChatPlugin';})) {
+                        Capacitor.PluginHeaders.push({
+                            name: 'AIChatPlugin',
+                            methods: [{ name: 'openChat', rtype: 'promise' }]
+                        });
+                    }
+                    // 2. 再注册插件代理
+                    if (Capacitor.registerPlugin && !Capacitor.Plugins.AIChatPlugin) {
                         Capacitor.registerPlugin('AIChatPlugin');
                         console.log('JS端手动注册 AIChatPlugin 成功');
                     }
