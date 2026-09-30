@@ -14,6 +14,9 @@
 		F9F8A68BFB82F99D7CDCA92D /* PhotoSaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43E700EF3D732C560F0952F /* PhotoSaver.swift */; };
 		99A67B43EA3733788E5B0CC7 /* MyViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 281F88CF254D4AAB50AF38C7 /* MyViewController.swift */; };
 		A1B2C3D4E5F60718293A4B5C /* BackgroundAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F60718293A4B5C6D /* BackgroundAudio.swift */; };
+	6F46BCA0A92D938FFAB75A1C /* AIChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E3C2A64B635F8E06DE66160 /* AIChatViewModel.swift */; };
+	C3F7DC86905741CFADBA8276 /* AIChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6662D367F84E923D08347EF6 /* AIChatView.swift */; };
+	0F33658EBB22B2601616DB6D /* AIChatPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05638746B2F9051D8E911BE7 /* AIChatPlugin.swift */; };
 		C3D4E5F60718293A4B5C6D7E /* silence.wav in Resources */ = {isa = PBXBuildFile; fileRef = D4E5F60718293A4B5C6D7E8F /* silence.wav */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
@@ -31,6 +34,9 @@
 		C43E700EF3D732C560F0952F /* PhotoSaver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSaver.swift; sourceTree = "<group>"; };
 		281F88CF254D4AAB50AF38C7 /* MyViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyViewController.swift; sourceTree = "<group>"; };
 		B2C3D4E5F60718293A4B5C6D /* BackgroundAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundAudio.swift; sourceTree = "<group>"; };
+	0E3C2A64B635F8E06DE66160 /* AIChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIChatViewModel.swift; sourceTree = "<group>"; };
+	6662D367F84E923D08347EF6 /* AIChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIChatView.swift; sourceTree = "<group>"; };
+	05638746B2F9051D8E911BE7 /* AIChatPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIChatPlugin.swift; sourceTree = "<group>"; };
 		D4E5F60718293A4B5C6D7E8F /* silence.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = silence.wav; sourceTree = "<group>"; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
@@ -80,6 +86,9 @@
 				C43E700EF3D732C560F0952F /* PhotoSaver.swift */,
 				281F88CF254D4AAB50AF38C7 /* MyViewController.swift */,
 				B2C3D4E5F60718293A4B5C6D /* BackgroundAudio.swift */,
+			0E3C2A64B635F8E06DE66160 /* AIChatViewModel.swift */,
+			6662D367F84E923D08347EF6 /* AIChatView.swift */,
+			05638746B2F9051D8E911BE7 /* AIChatPlugin.swift */,
 				D4E5F60718293A4B5C6D7E8F /* silence.wav */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -178,6 +187,9 @@
 				F9F8A68BFB82F99D7CDCA92D /* PhotoSaver.swift in Sources */,
 				99A67B43EA3733788E5B0CC7 /* MyViewController.swift in Sources */,
 				A1B2C3D4E5F60718293A4B5C /* BackgroundAudio.swift in Sources */,
+			6F46BCA0A92D938FFAB75A1C /* AIChatViewModel.swift in Sources */,
+			C3F7DC86905741CFADBA8276 /* AIChatView.swift in Sources */,
+			0F33658EBB22B2601616DB6D /* AIChatPlugin.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 			);

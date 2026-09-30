@@ -4,10 +4,10 @@ import SwiftUI
 struct AIChatView: View {
     @StateObject private var viewModel = AIChatViewModel()
     @FocusState private var isInputFocused: Bool
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
     
     var body: some View {
-        NavigationStack {
+        NavigationView {
             VStack(spacing: 0) {
                 // 消息列表
                 messageList
@@ -15,12 +15,12 @@ struct AIChatView: View {
                 // 输入区域
                 inputBar
             }
-            .navigationTitle("AI 对话")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitle("AI 对话")
+            
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("关闭") {
-                        dismiss()
+                        presentationMode.wrappedValue.dismiss()
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -60,14 +60,14 @@ struct AIChatView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
             }
-            .onChange(of: viewModel.messages.count) { _, _ in
+            .onChange(of: viewModel.messages.count) { _ in
                 if let lastMessage = viewModel.messages.last {
                     withAnimation(.easeOut(duration: 0.25)) {
                         proxy.scrollTo(lastMessage.id, anchor: .bottom)
                     }
                 }
             }
-            .onChange(of: viewModel.messages.last?.content) { _, _ in
+            .onChange(of: viewModel.messages.last?.content) { _ in
                 if let lastMessage = viewModel.messages.last, lastMessage.isStreaming {
                     withAnimation(.easeOut(duration: 0.25)) {
                         proxy.scrollTo(lastMessage.id, anchor: .bottom)
