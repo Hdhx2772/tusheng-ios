@@ -294,6 +294,7 @@ body {
         </div>
     </div>
     <button class="btn btn-primary" id="generateBtn" onclick="submitEdit()">开始生成</button>
+    <button class="btn btn-secondary" id="aiChatBtn" onclick="openAIChat()" style="margin-top:10px;background:linear-gradient(135deg,#8b5cf6,#6366f1);">💬 AI 对话</button>
     <div class="card loading-card" id="loadingCard">
         <div class="loading-ring-wrap">
             <div class="loading-ring-bg"></div>
@@ -688,6 +689,20 @@ function showTabBar() {
     }, 100);
 }
 
+
+// 打开原生 AI 对话界面
+function openAIChat() {
+    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.AIChatPlugin) {
+        Capacitor.Plugins.AIChatPlugin.openChat().then(function(res) {
+            debugLog('AI 对话已打开', 'INFO');
+        }).catch(function(err) {
+            debugLog('打开 AI 对话失败: ' + err.message, 'ERROR');
+            showToast('打开 AI 对话失败');
+        });
+    } else {
+        showToast('当前版本不支持 AI 对话');
+    }
+}
 async function submitEdit() {
     if (!selectedFile) { showToast('请先选择图片'); return; }
     var prompt = document.getElementById('promptInput').value.trim();

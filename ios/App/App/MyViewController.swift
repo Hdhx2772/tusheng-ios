@@ -73,6 +73,8 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         log("✅ Notifier 已注册")
         bridge.registerPluginInstance(BackgroundAudio())
         log("✅ BackgroundAudio 已注册")
+        bridge.registerPluginInstance(AIChatPlugin())
+        log("✅ AIChatPlugin 已注册")
         
         log("✅ 所有自定义插件注册完成")
         
