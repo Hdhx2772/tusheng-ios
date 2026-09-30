@@ -73,8 +73,16 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         log("✅ Notifier 已注册")
         bridge.registerPluginInstance(BackgroundAudio())
         log("✅ BackgroundAudio 已注册")
-        bridge.registerPluginInstance(AIChatPlugin())
-        log("✅ AIChatPlugin 已注册")
+        
+        // 注册 AI 对话插件（带错误捕获）
+        do {
+            let plugin = AIChatPlugin()
+            log("🔍 AIChatPlugin 实例创建成功: \(type(of: plugin))")
+            bridge.registerPluginInstance(plugin)
+            log("✅ AIChatPlugin 已注册")
+        } catch {
+            log("❌ AIChatPlugin 注册失败: \(error.localizedDescription)")
+        }
         
         log("✅ 所有自定义插件注册完成")
         
