@@ -6,19 +6,18 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
     
     private var nativeLogs: [String] = []
     
-    // SSL Pinning：允许的公钥 SHA-256 哈希（Base64）
-    // wutong.xyz 公钥哈希，证书续期后公钥不变，无需更新
+    // SSL Pinning：只对这些域名做证书锁定
+    // 其他域名（freemaker.net、r2.dev 等）走系统默认验证
+    private let pinnedHosts: Set<String> = ["wutong.xyz", "www.wutong.xyz"]
+    
+    // 允许的公钥 SHA-256 哈希（Base64）
+    // 用公钥而非证书，证书续期后公钥不变，无需更新 App
     private let pinnedPublicKeyHashes: Set<String> = [
         "0N5PsYbLsX3MHFyWp0KwqcgC++uJ9Brzwv3yphZzpTo=" // wutong.xyz 公钥
     ]
     
-    // 备份：叶子证书 SHA-256 哈希（证书续期后需更新）
-    private let pinnedCertificateHashes: Set<String> = [
-        "kQexiQA74znd2a9BIRJxO3T2VQ+PQ/VpCfo2mgn9lds=" // wutong.xyz 叶子证书
-    ]
-    
-    // 保存原始 delegate，避免覆盖 Capacitor 内部逻辑
-    private weak var originalNavDelegate: WKNavigationDelegate?
+    // 保存 Capacitor 原始 delegate，避免覆盖内部逻辑
+    private weak var capDelegate: WKNavigationDelegate?
     
     private func log(_ msg: String) {
         let time = DateFormatter()
@@ -51,11 +50,11 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         super.viewDidLoad()
         log("MyViewController viewDidLoad, bridge=\(String(describing: bridge))")
         
-        // 设置 SSL Pinning：接管 WKWebView 的 navigationDelegate
+        // 接管 WKWebView 的 navigationDelegate 以实现 SSL Pinning
         if let webView = bridge?.webView {
-            originalNavDelegate = webView.navigationDelegate
+            capDelegate = webView.navigationDelegate
             webView.navigationDelegate = self
-            log("✅ SSL Pinning 已启用，pinned keys: \(pinnedPublicKeyHashes.count) 个公钥 + \(pinnedCertificateHashes.count) 个证书")
+            log("✅ SSL Pinning 已启用，锁定域名: \(pinnedHosts.joined(separator: ", "))")
         }
     }
     
@@ -68,7 +67,6 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
             return
         }
         
-        // 注册自定义插件（实现了 CAPBridgedPlugin 协议）
         bridge.registerPluginInstance(PhotoSaver())
         log("✅ PhotoSaver 已注册")
         bridge.registerPluginInstance(Notifier())
@@ -78,7 +76,6 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         
         log("✅ 所有自定义插件注册完成")
         
-        // 延迟检查 JS 端是否能看到插件
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             self?.checkPluginsInJS()
         }
@@ -104,39 +101,58 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         }
     }
     
-    // MARK: - SSL Pinning
+    // MARK: - SSL Pinning (WKNavigationDelegate)
     
+    /// 处理 HTTPS 服务器信任验证挑战
+    /// 只对 pinnedHosts 中的域名做证书锁定，其他域名走系统默认处理
     func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
                  completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         
-        // 只处理服务器信任验证
-        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-              let serverTrust = challenge.protectionSpace.serverTrust else {
-            // 其他类型的 challenge，交给原始 delegate 或默认处理
-            if originalNavDelegate?.responds(to: #selector(WKNavigationDelegate.webView(_:didReceive:completionHandler:))) == true {
-                originalNavDelegate?.webView?(webView, didReceive: challenge, completionHandler: completionHandler)
-            } else {
-                completionHandler(.performDefaultHandling, nil)
-            }
+        // 只处理服务器信任验证类型的挑战
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust else {
+            // 其他类型挑战（如客户端证书、HTTP Basic Auth）交给 Capacitor 或系统处理
+            forwardChallengeToCapacitor(webView, challenge: challenge, completionHandler: completionHandler)
             return
         }
         
         let host = challenge.protectionSpace.host
+        
+        // 非锁定域名：走系统默认信任评估
+        guard pinnedHosts.contains(host) else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        
+        guard let serverTrust = challenge.protectionSpace.serverTrust else {
+            log("❌ SSL Pinning: \(host) 无法获取 serverTrust")
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+        
         log("🔐 SSL Pinning 验证: \(host)")
         
-        // 验证证书链
         if verifyServerTrust(serverTrust, host: host) {
             log("✅ SSL Pinning 验证通过: \(host)")
             completionHandler(.useCredential, URLCredential(trust: serverTrust))
         } else {
-            log("❌ SSL Pinning 验证失败: \(host)，连接已取消")
+            log("❌ SSL Pinning 验证失败: \(host)，连接已取消（可能是抓包工具中间人攻击）")
             completionHandler(.cancelAuthenticationChallenge, nil)
         }
     }
     
-    /// 验证服务器证书：检查证书链中的公钥或证书哈希是否在白名单中
+    /// 将非服务器信任类型的挑战转发给 Capacitor 原始 delegate
+    private func forwardChallengeToCapacitor(_ webView: WKWebView, challenge: URLAuthenticationChallenge,
+                                             completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        if capDelegate?.webView?(webView, didReceive: challenge, completionHandler: completionHandler) != nil {
+            // Capacitor 已处理
+        } else {
+            completionHandler(.performDefaultHandling, nil)
+        }
+    }
+    
+    /// 验证服务器证书链：检查证书链中任意证书的公钥哈希是否在白名单中
     private func verifyServerTrust(_ trust: SecTrust, host: String) -> Bool {
-        // 1. 先用系统默认策略验证证书链有效性（防止过期、域名不匹配等）
+        // 1. 先用系统默认策略验证证书链有效性（过期、域名不匹配等）
         let policy = SecPolicyCreateSSL(true, host as CFString)
         SecTrustSetPolicies(trust, policy)
         
@@ -146,8 +162,7 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
             return false
         }
         
-        // 2. 遍历证书链，检查公钥哈希或证书哈希
-        // iOS 15+ 使用 SecTrustCopyCertificateChain，旧版本回退到 SecTrustGetCertificateAtIndex
+        // 2. 获取证书链（iOS 15+ 用新 API，旧版本回退）
         let certificates: [SecCertificate]
         if #available(iOS 15.0, *) {
             certificates = (SecTrustCopyCertificateChain(trust) as? [SecCertificate]) ?? []
@@ -156,32 +171,23 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
             certificates = (0..<count).compactMap { SecTrustGetCertificateAtIndex(trust, $0) }
         }
         
+        // 3. 遍历证书链，检查公钥哈希
         for (i, cert) in certificates.enumerated() {
-            
-            // 检查公钥哈希（更稳定，续期后不变）
             if let publicKey = SecCertificateCopyKey(cert),
                let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, nil) as Data? {
                 let pubKeyHash = sha256Base64(publicKeyData)
                 if pinnedPublicKeyHashes.contains(pubKeyHash) {
-                    log("✅ 公钥哈希匹配 (证书 \(i))")
+                    log("✅ 公钥哈希匹配 (证书链第 \(i) 级)")
                     return true
                 }
             }
-            
-            // 检查证书哈希（备份方案）
-            let certData = SecCertificateCopyData(cert) as Data
-            let certHash = sha256Base64(certData)
-            if pinnedCertificateHashes.contains(certHash) {
-                log("✅ 证书哈希匹配 (证书 \(i))")
-                return true
-            }
         }
         
-        log("❌ 证书链中没有匹配的公钥或证书哈希")
+        log("❌ 证书链中没有匹配的公钥哈希（共 \(certificates.count) 个证书）")
         return false
     }
     
-    /// 计算 SHA-256 并返回 Base64 字符串
+    /// 计算数据的 SHA-256 并返回 Base64 字符串
     private func sha256Base64(_ data: Data) -> String {
         var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
         data.withUnsafeBytes { buffer in
@@ -190,44 +196,43 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         return Data(hash).base64EncodedString()
     }
     
-    // MARK: - 转发 WKNavigationDelegate 其他方法给原始 delegate
+    // MARK: - 转发其他 WKNavigationDelegate 方法给 Capacitor
     
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        originalNavDelegate?.webView?(webView, didFinish: navigation)
+        capDelegate?.webView?(webView, didFinish: navigation)
     }
     
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        originalNavDelegate?.webView?(webView, didStartProvisionalNavigation: navigation)
+        capDelegate?.webView?(webView, didStartProvisionalNavigation: navigation)
     }
     
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        originalNavDelegate?.webView?(webView, didFail: navigation, withError: error)
+        capDelegate?.webView?(webView, didFail: navigation, withError: error)
     }
     
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        originalNavDelegate?.webView?(webView, didFailProvisionalNavigation: navigation, withError: error)
+        capDelegate?.webView?(webView, didFailProvisionalNavigation: navigation, withError: error)
+    }
+    
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        capDelegate?.webView?(webView, didCommit: navigation)
+    }
+    
+    func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) {
+        capDelegate?.webView?(webView, didReceiveServerRedirectForProvisionalNavigation: navigation)
     }
     
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        // 直接用可选链调用，协议方法是可选的，未实现时什么都不做
-        if originalNavDelegate?.webView?(webView, decidePolicyFor: navigationAction, decisionHandler: decisionHandler) == nil {
+        if capDelegate?.webView?(webView, decidePolicyFor: navigationAction, decisionHandler: decisionHandler) == nil {
             decisionHandler(.allow)
         }
     }
     
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
-        if originalNavDelegate?.webView?(webView, decidePolicyFor: navigationResponse, decisionHandler: decisionHandler) == nil {
+        if capDelegate?.webView?(webView, decidePolicyFor: navigationResponse, decisionHandler: decisionHandler) == nil {
             decisionHandler(.allow)
         }
-    }
-    
-    func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) {
-        originalNavDelegate?.webView?(webView, didReceiveServerRedirectForProvisionalNavigation: navigation)
-    }
-    
-    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-        originalNavDelegate?.webView?(webView, didCommit: navigation)
     }
 }
