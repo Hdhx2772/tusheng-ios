@@ -122,11 +122,14 @@ public class BackgroundAudio: CAPPlugin, CAPBridgedPlugin {
         
         // 按字典序排序并拼接
         let sortedKeys = params.keys.sorted()
-        let message = sortedKeys.map { "\($0)=\(params[$0]!)" }.joined(separator: "&")
+        let queryString = sortedKeys.map { "\($0)=\(params[$0]!)" }.joined(separator: "&")
+        
+        // 与客户端一致的签名格式：timestamp + "\n" + nonce + "\n" + queryString
+        let stringToSign = timestamp + "\n" + nonce + "\n" + queryString
         
         // 计算 HMAC-SHA256 签名
         let key = SymmetricKey(data: API_SECRET.data(using: .utf8)!)
-        let signature = HMAC<SHA256>.authenticationCode(for: message.data(using: .utf8)!, using: key)
+        let signature = HMAC<SHA256>.authenticationCode(for: stringToSign.data(using: .utf8)!, using: key)
         let signatureHex = signature.map { String(format: "%02x", $0) }.joined()
         
         // 创建请求并添加签名头

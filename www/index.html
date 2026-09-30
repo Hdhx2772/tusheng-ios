@@ -1045,12 +1045,6 @@ function createDebugBox() {
     });
     document.addEventListener('mouseup', onDragEnd);
     
-    // 点击标题栏切换缩小/展开
-    header.addEventListener('click', function(e) {
-        if (e.target.tagName === 'BUTTON') return;
-        minimizeDebugBox();
-    });
-    
     // 渲染已有日志
     var contentEl = dbg.querySelector('.debug-content');
     debugLogs.forEach(function(entry) {
@@ -1070,15 +1064,33 @@ function minimizeDebugBox() {
     var content = dbg.querySelector('.debug-content');
     var title = dbg.querySelector('.debug-title');
     var minBtn = document.getElementById('minBtn');
-    if (content.style.display === 'none') {
-        // 展开
+    var isMinimized = content.style.display === 'none';
+    if (isMinimized) {
+        // 展开：重新渲染日志
         content.style.display = 'block';
+        content.style.visibility = 'visible';
+        content.style.height = '';
+        content.style.overflow = '';
+        content.innerHTML = '';
+        debugLogs.forEach(function(entry) {
+            var line = document.createElement('div');
+            line.className = 'log-line log-' + entry.level;
+            line.innerHTML = '<span class="log-time">[' + entry.time + ']</span>' + 
+                             '<span style="color:#888;margin-right:4px">[' + entry.level + ']</span>' + 
+                             escapeHtml(entry.msg);
+            content.appendChild(line);
+        });
+        content.scrollTop = content.scrollHeight;
         title.textContent = '调试日志 (' + debugLogs.length + ')';
         if (minBtn) minBtn.textContent = '缩小';
     } else {
-        // 缩小：只保留标题栏
+        // 缩小：完全隐藏内容区，只保留标题栏
         content.style.display = 'none';
-        title.textContent = '调试日志 (' + debugLogs.length + ') 条 - 点击展开';
+        content.style.visibility = 'hidden';
+        content.style.height = '0px';
+        content.style.overflow = 'hidden';
+        content.innerHTML = '';
+        title.textContent = '调试日志 (' + debugLogs.length + ') 条';
         if (minBtn) minBtn.textContent = '展开';
     }
 }
