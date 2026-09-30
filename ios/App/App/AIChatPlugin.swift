@@ -6,8 +6,11 @@ import SwiftUI
 @objc(AIChatPlugin)
 public class AIChatPlugin: CAPPlugin {
     
+    // 必须显式定义 jsName，否则 registerPluginInstance 会用带模块名前缀的默认值（如 App.AIChatPlugin）
+    // 导致 JS 端 nativePromise('AIChatPlugin', ...) 找不到插件
+    public let jsName = "AIChatPlugin"
+    
     @objc func openChat(_ call: CAPPluginCall) {
-        NSLog("🔍 AIChatPlugin.openChat 被调用")
         NSLog("🔍 AIChatPlugin.openChat 被调用")
         DispatchQueue.main.async { [weak self] in
             guard let self = self else {
