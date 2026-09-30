@@ -4,7 +4,6 @@ import Capacitor
 class MyViewController: CAPBridgeViewController {
     
     private var nativeLogs: [String] = []
-    private var pluginsRegistered = false
     
     private func log(_ msg: String) {
         let time = DateFormatter()
@@ -38,31 +37,22 @@ class MyViewController: CAPBridgeViewController {
         log("MyViewController viewDidLoad, bridge=\(String(describing: bridge))")
     }
     
-    override open func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        log("MyViewController viewDidAppear, bridge=\(String(describing: bridge))")
-        registerPluginsIfNeeded()
-    }
-    
-    private func registerPluginsIfNeeded() {
-        guard !pluginsRegistered else { return }
+    override open func capacitorDidLoad() {
+        super.capacitorDidLoad()
+        log("MyViewController capacitorDidLoad 被调用, bridge=\(String(describing: bridge))")
+        
         guard let bridge = bridge else {
-            log("❌ registerPlugins: bridge 为 nil")
+            log("❌ capacitorDidLoad: bridge 为 nil，无法注册插件")
             return
         }
-        pluginsRegistered = true
         
-        log("开始注册自定义插件...")
-        
-        // 注册插件实例
+        // 注册自定义插件（实现了 CAPBridgedPlugin 协议）
         bridge.registerPluginInstance(PhotoSaver())
-        log("✅ registerPluginInstance(PhotoSaver()) 完成")
-        
+        log("✅ PhotoSaver 已注册")
         bridge.registerPluginInstance(Notifier())
-        log("✅ registerPluginInstance(Notifier()) 完成")
-        
+        log("✅ Notifier 已注册")
         bridge.registerPluginInstance(BackgroundAudio())
-        log("✅ registerPluginInstance(BackgroundAudio()) 完成")
+        log("✅ BackgroundAudio 已注册")
         
         log("✅ 所有自定义插件注册完成")
         
@@ -90,10 +80,5 @@ class MyViewController: CAPBridgeViewController {
                 self?.log("📋 \(result)")
             }
         }
-    }
-    
-    override open func capacitorDidLoad() {
-        super.capacitorDidLoad()
-        log("MyViewController capacitorDidLoad 被调用, bridge=\(String(describing: bridge))")
     }
 }

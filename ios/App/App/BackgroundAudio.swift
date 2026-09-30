@@ -3,7 +3,14 @@ import Capacitor
 import AVFoundation
 
 @objc(BackgroundAudio)
-public class BackgroundAudio: CAPPlugin {
+public class BackgroundAudio: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "BackgroundAudio"
+    public let jsName = "BackgroundAudio"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise)
+    ]
+    
     private var audioPlayer: AVAudioPlayer?
     
     @objc func start(_ call: CAPPluginCall) {

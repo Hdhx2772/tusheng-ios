@@ -3,7 +3,14 @@ import Capacitor
 import UserNotifications
 
 @objc(Notifier)
-public class Notifier: CAPPlugin, UNUserNotificationCenterDelegate {
+public class Notifier: CAPPlugin, CAPBridgedPlugin, UNUserNotificationCenterDelegate {
+    public let identifier = "Notifier"
+    public let jsName = "Notifier"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "requestPermission", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "sendNotification", returnType: CAPPluginReturnPromise)
+    ]
+    
     private var notificationCall: CAPPluginCall?
 
     override public func load() {

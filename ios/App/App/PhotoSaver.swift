@@ -3,7 +3,14 @@ import Capacitor
 import Photos
 
 @objc(PhotoSaver)
-public class PhotoSaver: CAPPlugin {
+public class PhotoSaver: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "PhotoSaver"
+    public let jsName = "PhotoSaver"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "saveImage", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "saveImageFromUrl", returnType: CAPPluginReturnPromise)
+    ]
+    
     private var saveCall: CAPPluginCall?
 
     // 从 base64 保存
