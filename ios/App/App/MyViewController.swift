@@ -147,9 +147,16 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
         }
         
         // 2. 遍历证书链，检查公钥哈希或证书哈希
-        let count = SecTrustGetCertificateCount(trust)
-        for i in 0..<count {
-            guard let cert = SecTrustGetCertificateAtIndex(trust, i) else { continue }
+        // iOS 15+ 使用 SecTrustCopyCertificateChain，旧版本回退到 SecTrustGetCertificateAtIndex
+        let certificates: [SecCertificate]
+        if #available(iOS 15.0, *) {
+            certificates = (SecTrustCopyCertificateChain(trust) as? [SecCertificate]) ?? []
+        } else {
+            let count = SecTrustGetCertificateCount(trust)
+            certificates = (0..<count).compactMap { SecTrustGetCertificateAtIndex(trust, $0) }
+        }
+        
+        for (i, cert) in certificates.enumerated() {
             
             // 检查公钥哈希（更稳定，续期后不变）
             if let publicKey = SecCertificateCopyKey(cert),
@@ -203,18 +210,15 @@ class MyViewController: CAPBridgeViewController, WKNavigationDelegate {
     
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        if originalNavDelegate?.responds(to: #selector(WKNavigationDelegate.webView(_:decidePolicyFor:decisionHandler:))) == true {
-            originalNavDelegate?.webView?(webView, decidePolicyFor: navigationAction, decisionHandler: decisionHandler)
-        } else {
+        // 直接用可选链调用，协议方法是可选的，未实现时什么都不做
+        if originalNavDelegate?.webView?(webView, decidePolicyFor: navigationAction, decisionHandler: decisionHandler) == nil {
             decisionHandler(.allow)
         }
     }
     
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
-        if originalNavDelegate?.responds(to: #selector(WKNavigationDelegate.webView(_:decidePolicyFor:decisionHandler:))) == true {
-            originalNavDelegate?.webView?(webView, decidePolicyFor: navigationResponse, decisionHandler: decisionHandler)
-        } else {
+        if originalNavDelegate?.webView?(webView, decidePolicyFor: navigationResponse, decisionHandler: decisionHandler) == nil {
             decisionHandler(.allow)
         }
     }
