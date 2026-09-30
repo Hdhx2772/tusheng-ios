@@ -986,13 +986,14 @@ function createDebugBox() {
     if (dbg) { dbg.style.display = 'block'; return; }
     dbg = document.createElement('div');
     dbg.id = 'debugBox';
-    dbg.style.cssText = 'top:80px;left:10px;right:10px;display:block;';
+    dbg.style.cssText = 'top:80px;left:10px;right:10px;display:block;z-index:99999;';
     dbg.innerHTML = 
         '<div class="debug-header">' +
         '  <span class="debug-title">调试日志 (' + debugLogs.length + ')</span>' +
         '  <div class="debug-actions">' +
         '    <button class="debug-btn" onclick="copyDebugLog()">复制</button>' +
         '    <button class="debug-btn" onclick="clearDebugLog()">清空</button>' +
+        '    <button class="debug-btn" onclick="minimizeDebugBox()">缩小</button>' +
         '    <button class="debug-btn" onclick="closeDebugBox()">关闭</button>' +
         '  </div>' +
         '</div>' +
@@ -1001,26 +1002,31 @@ function createDebugBox() {
     
     // 拖动功能
     var header = dbg.querySelector('.debug-header');
-    var isDragging = false, startX, startY, startTop, startLeft;
+    var isDragging = false, startX, startY, startTop, startLeft, hasMoved = false;
     header.addEventListener('touchstart', function(e) {
+        // 如果点击的是按钮，不开始拖动
+        if (e.target.tagName === 'BUTTON') return;
         isDragging = true;
+        hasMoved = false;
         var touch = e.touches[0];
         startX = touch.clientX; startY = touch.clientY;
         var rect = dbg.getBoundingClientRect();
         startTop = rect.top; startLeft = rect.left;
-        e.preventDefault();
     });
     header.addEventListener('touchmove', function(e) {
         if (!isDragging) return;
         var touch = e.touches[0];
         var dx = touch.clientX - startX;
         var dy = touch.clientY - startY;
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) hasMoved = true;
         dbg.style.top = Math.max(0, startTop + dy) + 'px';
         dbg.style.left = Math.max(0, startLeft + dx) + 'px';
         dbg.style.right = 'auto';
         e.preventDefault();
     });
-    header.addEventListener('touchend', function() { isDragging = false; });
+    header.addEventListener('touchend', function(e) {
+        isDragging = false;
+    });
     
     // 渲染已有日志
     var contentEl = dbg.querySelector('.debug-content');
@@ -1033,6 +1039,24 @@ function createDebugBox() {
         contentEl.appendChild(line);
     });
     contentEl.scrollTop = contentEl.scrollHeight;
+}
+
+function minimizeDebugBox() {
+    var dbg = document.getElementById('debugBox');
+    if (!dbg) return;
+    var content = dbg.querySelector('.debug-content');
+    var title = dbg.querySelector('.debug-title');
+    if (content.style.display === 'none') {
+        // 展开
+        content.style.display = 'block';
+        title.textContent = '调试日志 (' + debugLogs.length + ')';
+        dbg.querySelector('.debug-actions .debug-btn:nth-child(3)').textContent = '缩小';
+    } else {
+        // 缩小
+        content.style.display = 'none';
+        title.textContent = '调试日志 (' + debugLogs.length + ') - 已缩小';
+        dbg.querySelector('.debug-actions .debug-btn:nth-child(3)').textContent = '展开';
+    }
 }
 
 function copyDebugLog() {
