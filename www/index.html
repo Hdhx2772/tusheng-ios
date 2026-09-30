@@ -450,7 +450,8 @@ var currentPrompt = '';
 var generationStartTime = 0;
 var isGenerating = false;
 var pollCount = 0;
-var historySaved = false; // 防止重复保存历史记录
+var historySaved = false;
+var wasInBackgroundDuringGeneration = false; // 防止重复保存历史记录
 var API_BASE = 'https://wutong.xyz';
 var APP_VERSION = '1.1';
 function showToast(msg, dur) {
@@ -1032,6 +1033,10 @@ function closeDebugBox() {
 // 生命周期监听
 document.addEventListener('visibilitychange', function() {
     debugLog('页面状态: ' + (document.hidden ? '进入后台' : '回到前台'), 'LIFECYCLE');
+    if (document.hidden && isGenerating) {
+        wasInBackgroundDuringGeneration = true;
+        debugLog('生成中进入后台，标记wasInBackgroundDuringGeneration=true', 'INFO');
+    }
 });
 window.addEventListener('pageshow', function(e) {
     debugLog('pageshow: persisted=' + e.persisted, 'LIFECYCLE');
@@ -1130,9 +1135,9 @@ function showResult(url) {
     resultImageUrl = url;
     lastPrompt = document.getElementById('promptInput').value.trim();
     
-    // 生成完成立即发送通知（不管图片有没有加载完成）
-    if (document.hidden && window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Notifier) {
-        debugLog('App在后台，发送生成完成通知', 'INFO');
+    // 生成完成发送通知（如果生成过程中曾经在后台）
+    if ((document.hidden || wasInBackgroundDuringGeneration) && window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Notifier) {
+        debugLog('发送生成完成通知 (document.hidden=' + document.hidden + ', wasInBackground=' + wasInBackgroundDuringGeneration + ')', 'INFO');
         Capacitor.Plugins.Notifier.sendNotification({
             title: '图生万物',
             body: '图片生成已完成，点击查看'
@@ -1178,6 +1183,9 @@ function showResult(url) {
         var elapsed = Math.round((Date.now()-generationStartTime)/1000);
         showToast('生成完成，用时 ' + elapsed + ' 秒', 2500);
     };
+    // 重置后台标记
+    wasInBackgroundDuringGeneration = false;
+    
     afterImg.onerror = function() {
         // 图片加载失败，仍然显示结果页
         document.getElementById('loadingCard').classList.remove('show');
