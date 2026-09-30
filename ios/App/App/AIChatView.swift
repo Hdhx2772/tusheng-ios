@@ -192,8 +192,3 @@ struct MessageBubble: View {
             )
     }
 }
-
-// MARK: - 预览
-#Preview {
-    AIChatView()
-}
