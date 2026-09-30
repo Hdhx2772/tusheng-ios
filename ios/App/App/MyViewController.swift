@@ -4,6 +4,7 @@ import Capacitor
 class MyViewController: CAPBridgeViewController {
     
     private var nativeLogs: [String] = []
+    private var pluginsRegistered = false
     
     private func log(_ msg: String) {
         let time = DateFormatter()
@@ -12,7 +13,6 @@ class MyViewController: CAPBridgeViewController {
         let entry = "[\(timestamp)][NATIVE] \(msg)"
         nativeLogs.append(entry)
         print(entry)
-        // 尝试发送到 JS 端
         sendLogsToJS()
     }
     
@@ -41,26 +41,70 @@ class MyViewController: CAPBridgeViewController {
     override open func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         log("MyViewController viewDidAppear, bridge=\(String(describing: bridge))")
+        // 在 viewDidAppear 里注册插件，此时 bridge 和 webView 都已初始化
+        registerPluginsIfNeeded()
+    }
+    
+    private func registerPluginsIfNeeded() {
+        guard !pluginsRegistered else { return }
+        guard let bridge = bridge else {
+            log("❌ registerPlugins: bridge 为 nil")
+            return
+        }
+        pluginsRegistered = true
+        
+        log("开始注册自定义插件...")
+        
+        // 方式1: 注册插件类
+        bridge.registerPlugin(PhotoSaver.self)
+        log("✅ registerPlugin(PhotoSaver.self) 完成")
+        
+        bridge.registerPlugin(Notifier.self)
+        log("✅ registerPlugin(Notifier.self) 完成")
+        
+        bridge.registerPlugin(BackgroundAudio.self)
+        log("✅ registerPlugin(BackgroundAudio.self) 完成")
+        
+        // 方式2: 同时注册实例（双保险）
+        bridge.registerPluginInstance(PhotoSaver())
+        log("✅ registerPluginInstance(PhotoSaver()) 完成")
+        
+        bridge.registerPluginInstance(Notifier())
+        log("✅ registerPluginInstance(Notifier()) 完成")
+        
+        bridge.registerPluginInstance(BackgroundAudio())
+        log("✅ registerPluginInstance(BackgroundAudio()) 完成")
+        
+        log("✅ 所有自定义插件注册完成")
+        
+        // 延迟检查 JS 端是否能看到插件
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.checkPluginsInJS()
+        }
+    }
+    
+    private func checkPluginsInJS() {
+        guard let webView = bridge?.webView else { return }
+        let js = """
+        (function() {
+            var plugins = Object.keys(Capacitor.Plugins).join(', ');
+            var hasPhotoSaver = !!Capacitor.Plugins.PhotoSaver;
+            var hasNotifier = !!Capacitor.Plugins.Notifier;
+            var hasBackgroundAudio = !!Capacitor.Plugins.BackgroundAudio;
+            return 'JS插件列表: ' + plugins + ' | PhotoSaver=' + hasPhotoSaver + ' Notifier=' + hasNotifier + ' BackgroundAudio=' + hasBackgroundAudio;
+        })()
+        """
+        webView.evaluateJavaScript(js) { [weak self] result, error in
+            if let error = error {
+                self?.log("❌ 检查JS插件失败: \(error.localizedDescription)")
+            } else if let result = result as? String {
+                self?.log("📋 \(result)")
+            }
+        }
     }
     
     override open func capacitorDidLoad() {
         super.capacitorDidLoad()
         log("MyViewController capacitorDidLoad 被调用, bridge=\(String(describing: bridge))")
-        
-        guard let bridge = bridge else {
-            log("❌ capacitorDidLoad: bridge 为 nil，无法注册插件")
-            return
-        }
-        
-        // 手动注册自定义插件
-        bridge.registerPluginInstance(PhotoSaver())
-        log("✅ PhotoSaver 已注册")
-        bridge.registerPluginInstance(Notifier())
-        log("✅ Notifier 已注册")
-        bridge.registerPluginInstance(BackgroundAudio())
-        log("✅ BackgroundAudio 已注册")
-        
-        log("✅ 所有自定义插件注册完成")
-        sendLogsToJS()
     }
 }
