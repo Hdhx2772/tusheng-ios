@@ -997,7 +997,7 @@ function createDebugBox() {
     
     dbg = document.createElement('div');
     dbg.id = 'debugBox';
-    dbg.style.cssText = 'position:fixed;top:80px;left:10px;right:10px;z-index:999999;display:block;';
+    dbg.style.cssText = 'position:fixed;top:80px;left:10px;right:10px;z-index:9999999;display:block;pointer-events:auto;';
     
     // 标题栏
     var header = document.createElement('div');
@@ -1014,36 +1014,13 @@ function createDebugBox() {
     
     function makeBtn(text, clickHandler) {
         var btn = document.createElement('div');
+        btn.className = 'debug-btn';
         btn.textContent = text;
-        btn.style.cssText = 'padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;';
-        var touched = false;
-        btn.addEventListener('touchstart', function(e) {
+        btn.style.cssText = 'padding:5px 12px;font-size:12px;border-radius:6px;background:rgba(255,255,255,0.2);color:#fff;cursor:pointer;user-select:none;-webkit-user-select:none;flex-shrink:0;';
+        btn.onclick = function(e) {
             e.stopPropagation();
-            touched = true;
-            btn.style.background = 'rgba(255,255,255,0.35)';
-        }, {passive: true});
-        btn.addEventListener('touchend', function(e) {
-            e.stopPropagation();
-            e.preventDefault();
-            btn.style.background = 'rgba(255,255,255,0.2)';
-            if (touched) {
-                touched = false;
-                clickHandler();
-            }
-        }, {passive: false});
-        btn.addEventListener('touchcancel', function() {
-            touched = false;
-            btn.style.background = 'rgba(255,255,255,0.2)';
-        });
-        btn.addEventListener('mousedown', function(e) {
-            e.stopPropagation();
-            btn.style.background = 'rgba(255,255,255,0.35)';
-        });
-        btn.addEventListener('mouseup', function(e) {
-            e.stopPropagation();
-            btn.style.background = 'rgba(255,255,255,0.2)';
             clickHandler();
-        });
+        };
         return btn;
     }
     
@@ -1095,7 +1072,7 @@ function createDebugBox() {
     var isDragging = false, startX, startY, startTop, startLeft;
     
     header.addEventListener('touchstart', function(e) {
-        if (e.target.closest && e.target.closest('[style*="cursor:pointer"]')) return;
+        if (e.target.closest && e.target.closest('.debug-btn')) return;
         isDragging = true;
         var touch = e.touches[0];
         startX = touch.clientX;
@@ -1122,7 +1099,7 @@ function createDebugBox() {
     
     // 鼠标拖动
     header.addEventListener('mousedown', function(e) {
-        if (e.target.closest && e.target.closest('[style*="cursor:pointer"]')) return;
+        if (e.target.closest && e.target.closest('.debug-btn')) return;
         isDragging = true;
         startX = e.clientX;
         startY = e.clientY;
@@ -1356,7 +1333,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     bgClickCount = 0;
                     DEBUG_MODE = !DEBUG_MODE;
                     showToast(DEBUG_MODE ? '调试模式已开启' : '调试模式已关闭');
-                    if (!DEBUG_MODE) {
+                    if (DEBUG_MODE) {
+                        createDebugBox();
+                    } else {
                         var dbg = document.getElementById('debugBox');
                         if (dbg) dbg.remove();
                     }
