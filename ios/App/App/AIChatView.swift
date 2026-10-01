@@ -63,26 +63,24 @@ struct AIChatView: View {
         }
         .navigationTitle(session?.title ?? "对话")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if showCloseButton {
-                ToolbarItem(placement: .navigationBarLeading) {
+        .navigationBarItems(
+            leading: Group {
+                if showCloseButton {
                     Button("关闭") {
                         presentationMode.wrappedValue.dismiss()
                     }
                 }
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button(role: .destructive) {
-                        viewModel.clearChat()
-                    } label: {
-                        Label("清空当前对话", systemImage: "trash")
-                    }
+            },
+            trailing: Menu {
+                Button(role: .destructive) {
+                    viewModel.clearChat()
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Label("清空当前对话", systemImage: "trash")
                 }
+            } label: {
+                Image(systemName: "ellipsis.circle")
             }
-        }
+        )
         .alert("提示", isPresented: $store.showAuthAlert) {
             Button("确定", role: .cancel) { }
         } message: {
