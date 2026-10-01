@@ -13,17 +13,19 @@ struct ChatMessage: Identifiable, Equatable, Codable {
     var role: MessageRole
     var content: String
     var isStreaming: Bool = false
+    var isInterrupted: Bool = false   // 网络中断但内容已保存
 
-    // isStreaming 仅用于界面展示，不持久化
+    // isStreaming / isInterrupted 仅用于界面展示，不持久化
     enum CodingKeys: String, CodingKey {
         case id, role, content
     }
 
-    init(id: UUID = UUID(), role: MessageRole, content: String, isStreaming: Bool = false) {
+    init(id: UUID = UUID(), role: MessageRole, content: String, isStreaming: Bool = false, isInterrupted: Bool = false) {
         self.id = id
         self.role = role
         self.content = content
         self.isStreaming = isStreaming
+        self.isInterrupted = isInterrupted
     }
 
     init(from decoder: Decoder) throws {
@@ -215,7 +217,8 @@ final class ChatStore: ObservableObject {
         }
     }
 
-    // 网络中断但已有部分内容：保留已生成内容，追加中断提示，不覆盖
+    // 网络中断但已有部分内容：保留已生成内容（已实时缓存到本地文件），
+    // 追加"已保存"提示，不覆盖、不清空，由用户决定是否重新生成
     func markInterrupted(id: UUID) {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
         if let mi = sessions[i].messages.lastIndex(where: { $0.isStreaming }) {
@@ -223,22 +226,30 @@ final class ChatStore: ObservableObject {
             if current.isEmpty {
                 sessions[i].messages[mi].content = "请求失败：网络中断"
             } else {
-                sessions[i].messages[mi].content = current + "\n\n⚠️ 网络中断，内容可能不完整"
+                sessions[i].messages[mi].content = current + "\n\n⚠️ 网络中断，内容已保存"
             }
             sessions[i].messages[mi].isStreaming = false
+            sessions[i].messages[mi].isInterrupted = true
             touch(i)
             save()
         }
     }
 
-    // 自动重连前清空占位气泡内容（保持 isStreaming=true），重新生成完整回复
-    func resetStreamingContent(id: UUID) {
+    // 用户手动重新生成：清空指定中断的 AI 消息（或最后一条），恢复为流式占位
+    func resetInterruptedMessage(id: UUID, messageId: UUID? = nil) {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
-        if let mi = sessions[i].messages.lastIndex(where: { $0.isStreaming }) {
+        if let mid = messageId {
+            guard let mi = sessions[i].messages.lastIndex(where: { $0.id == mid }) else { return }
             sessions[i].messages[mi].content = ""
-            touch(i)
-            save()
+            sessions[i].messages[mi].isStreaming = true
+            sessions[i].messages[mi].isInterrupted = false
+        } else if let mi = sessions[i].messages.lastIndex(where: { $0.role == .assistant }) {
+            sessions[i].messages[mi].content = ""
+            sessions[i].messages[mi].isStreaming = true
+            sessions[i].messages[mi].isInterrupted = false
         }
+        touch(i)
+        save()
     }
 
     // MARK: - 打开界面时检查一次授权（本次打开期间缓存，不重复请求）

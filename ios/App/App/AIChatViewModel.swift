@@ -17,6 +17,7 @@ final class AIChatViewModel: ObservableObject {
     private var retryCount = 0
     private let maxRetry = 2                  // 最多自动重连 2 次
     private var isRetrying = false            // 当前请求已被重连接管，收尾时跳过
+    private var lastDataTime = Date()         // 最后收到 SSE 数据的时间（心跳检测）
 
     // 关键修复：nottrack.ai 在国内 DNS 无法解析（实测直连失败、永久“思考中”），
     // 官方备用域名 nottrack.com 接口完全相同，国内直连实测 HTTP 200 且 SSE 正常。
@@ -47,6 +48,7 @@ final class AIChatViewModel: ObservableObject {
         isLoading = true
         pendingText = text
         retryCount = 0
+        lastDataTime = Date()
 
         // 用户消息 + AI 占位气泡
         store.appendMessage(ChatMessage(role: .user, content: text), to: sessionId)
@@ -155,22 +157,19 @@ final class AIChatViewModel: ObservableObject {
         let isRecoverable = recoverableCodes.contains(code)
         let hasContent = !(store?.session(sessionId)?.messages.last?.content.isEmpty ?? true)
 
-        if isRecoverable && retryCount < maxRetry {
-            // 自动重连：无论是否已有内容都重试一次。
-            // 若已有部分内容，先清空占位重新生成完整回复，避免内容错乱/重复。
+        if isRecoverable && !hasContent && retryCount < maxRetry {
+            // 尚未收到任何内容就断了（刚发消息/思考中）：自动重连继续
             retryCount += 1
             let text = pendingText ?? ""
             isRetrying = true   // 标记旧请求被接管，避免其收尾提前结束占位气泡
-            if hasContent {
-                store?.resetStreamingContent(id: sessionId)
-            }
             NSLog("🔄 [SSE] 网络错误(\(code))，自动重连 \(retryCount)/\(maxRetry)")
             Task { await sendStreamRequest(text: text, isRetry: true) }
             return
         }
 
-        if isRecoverable && hasContent {
-            // 已重试多次仍失败：保留内容并标记中断，不覆盖成"请求失败"
+        if hasContent {
+            // 已有部分内容：绝不自动清空重来。内容已实时缓存到本地文件，
+            // 保留现状并标记"已保存"，由用户决定是否重新生成。
             store?.markInterrupted(id: sessionId)
             isLoading = false
             return
@@ -184,6 +183,8 @@ final class AIChatViewModel: ObservableObject {
     // MARK: - 处理 SSE 事件
     private func handleSSEEvent(_ event: SSEEvent) {
         guard let store = store else { return }
+        // 心跳：收到任何事件都刷新最后活动时间
+        lastDataTime = Date()
         switch event.type {
         case "chat_meta":
             if let cid = event.chat_id {
@@ -215,8 +216,20 @@ final class AIChatViewModel: ObservableObject {
         guard isLoading else { return }
         guard let store = store,
               store.session(sessionId)?.messages.last?.isStreaming == true else { return }
-        // dataTask 已结束（didComplete 已触发）但占位还在流式 → 连接已断，自动重连
-        guard dataTask == nil || dataTask?.state == .completed else { return }
+        // 三种情况判定连接是否已死：
+        // 1) dataTask 已结束（didComplete 已触发）但占位还在流式 → 连接已断
+        // 2) dataTask 仍挂着但超过 20 秒没有任何 SSE 数据 → 实际已断（waitsForConnectivity 等待中）
+        let taskEnded = (dataTask == nil || dataTask?.state == .completed)
+        let silentTooLong = Date().timeIntervalSince(lastDataTime) > 20
+        guard taskEnded || silentTooLong else { return }
+
+        // 已有内容：保留（已实时缓存），不清空重来，标记已保存即可
+        if !(store.session(sessionId)?.messages.last?.content.isEmpty ?? true) {
+            store.markInterrupted(id: sessionId)
+            isLoading = false
+            return
+        }
+        // 尚无内容（刚发消息就切后台）：自动重连继续生成
         guard retryCount < maxRetry else {
             store.markInterrupted(id: sessionId)
             isLoading = false
@@ -225,16 +238,40 @@ final class AIChatViewModel: ObservableObject {
         retryCount += 1
         let text = pendingText ?? ""
         isRetrying = true
-        if !(store.session(sessionId)?.messages.last?.content.isEmpty ?? true) {
-            store.resetStreamingContent(id: sessionId)
-        }
         NSLog("🔄 [SSE] 回前台恢复，自动重连 \(retryCount)/\(maxRetry)")
         Task { await sendStreamRequest(text: text, isRetry: true) }
+    }
+
+    // MARK: - 重新生成中断的回复（用户主动点击，保留原问题重新生成完整内容）
+    func retryGeneration(messageId: UUID? = nil) {
+        guard !isLoading else { return }
+        guard let store = store,
+              let text = pendingText, !text.isEmpty else { return }
+        guard store.authorized else {
+            store.authMessage = "当前设备未授权，请联系管理员授权后使用\n设备码：\(store.deviceCode)"
+            store.showAuthAlert = true
+            return
+        }
+        // 若指定了消息 ID，只允许重试该条中断消息；未指定则回退到最后一条 assistant
+        if let mid = messageId {
+            guard let m = store.session(sessionId)?.messages.last(where: { $0.id == mid }),
+                  m.role == .assistant, m.isInterrupted else { return }
+        } else {
+            guard let last = store.session(sessionId)?.messages.last,
+                  last.role == .assistant, last.isInterrupted else { return }
+        }
+        // 把目标中断的 AI 消息清空并重新置为流式，复用占位气泡
+        store.resetInterruptedMessage(id: sessionId, messageId: messageId)
+        isLoading = true
+        retryCount = 0
+        lastDataTime = Date()
+        Task { await sendStreamRequest(text: text) }
     }
 
     // MARK: - 停止生成
     func stopGeneration() {
         dataTask?.cancel()
+        isRetrying = false
         store?.markDone(id: sessionId)
         isLoading = false
     }

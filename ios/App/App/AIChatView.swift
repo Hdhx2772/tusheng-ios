@@ -8,8 +8,9 @@ struct AIChatView: View {
     @FocusState private var isInputFocused: Bool
     @Environment(\.scenePhase) private var scenePhase
 
-    // 是否在底部附近：用户在底部时才自动跟随滚动，上翻看历史时不打扰
-    @State private var isNearBottom = true
+    // 用户是否手动上翻过（看历史）：一旦上翻就停止自动跟随，直到用户发新消息或点"回到底部"
+    @State private var userScrolledUp = false
+    @State private var scrollProxy: ScrollViewProxy?
 
     private let sessionId: UUID
 
@@ -26,6 +27,33 @@ struct AIChatView: View {
         VStack(spacing: 0) {
             messageList
             inputBar
+        }
+        .overlay(alignment: .bottomTrailing) {
+            // 用户上翻看历史时显示"回到底部"按钮
+            if userScrolledUp {
+                Button {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        userScrolledUp = false
+                        if let proxy = scrollProxy {
+                            scrollToBottom(proxy)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.down")
+                        Text("回到底部")
+                    }
+                    .font(.footnote.weight(.medium))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Color(.systemBackground)))
+                    .overlay(Capsule().stroke(Color(.systemGray4), lineWidth: 0.5))
+                    .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .navigationTitle(session?.title ?? "对话")
         .navigationBarTitleDisplayMode(.inline)
@@ -65,41 +93,39 @@ struct AIChatView: View {
                             emptyState
                         } else {
                             ForEach(messages) { message in
-                                MessageBubble(message: message)
-                                    .id(message.id)
+                                MessageBubble(message: message) {
+                                    viewModel.retryGeneration(messageId: message.id)
+                                }
+                                .id(message.id)
                             }
                         }
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(
-                        // 底部锚点：读取内容底部的全局屏幕坐标，随滚动真实变化
-                        GeometryReader { contentGeo in
-                            Color.clear.preference(
-                                key: ScrollBottomKey.self,
-                                value: contentGeo.frame(in: .global).maxY
-                            )
+                }
+                // 直接监听用户拖动手势：用户上翻（手指向下滑）→ 停止自动跟随
+                .simultaneousGesture(
+                    DragGesture()
+                        .onChanged { value in
+                            // 手指向下滑（translation.height > 0）= 查看上方历史 → 停止跟随
+                            if value.translation.height > 8 {
+                                userScrolledUp = true
+                            }
                         }
-                    )
-                }
-                .onPreferenceChange(ScrollBottomKey.self) { bottomY in
-                    // 内容底部在屏幕上的位置：接近可视区底部 → 在底部；
-                    // 上翻后内容底部跑到屏幕下方更远处 → 不在底部
-                    let viewportBottom = outer.frame(in: .global).maxY
-                    isNearBottom = bottomY <= viewportBottom + 200
-                }
+                )
                 .onChange(of: messages.count) { _ in
-                    // 用户刚发出消息 → 强制滚到底部看到自己的消息
-                    // AI 新增占位气泡 → 仅当已在底部时才跟随，不打扰上翻的用户
+                    // 用户刚发出消息 → 强制滚到底部并恢复跟随
                     if messages.last?.role == .user {
-                        isNearBottom = true
+                        userScrolledUp = false
                         scrollToBottom(proxy)
-                    } else if isNearBottom {
+                    } else if !userScrolledUp {
+                        // AI 新增消息 → 用户在底部才跟随
                         scrollToBottom(proxy)
                     }
                 }
                 .onChange(of: messages.last?.content) { _ in
-                    if messages.last?.isStreaming == true && isNearBottom {
+                    // 流式生成中：仅当用户没有手动上翻时才跟随到底部
+                    if messages.last?.isStreaming == true && !userScrolledUp {
                         scrollToBottom(proxy)
                     }
                 }
@@ -183,6 +209,7 @@ struct AIChatView: View {
 // MARK: - 消息气泡
 struct MessageBubble: View {
     let message: ChatMessage
+    var onRetry: (() -> Void)?
     @State private var copied = false
 
     private let bubbleMaxWidth = UIScreen.main.bounds.width * 0.78
@@ -198,10 +225,12 @@ struct MessageBubble: View {
                 avatar
             }
 
-            // 气泡 + 复制按钮，整体按角色对齐
+            // 气泡 + 复制/重试按钮，整体按角色对齐
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
                 bubble
-                if !message.content.isEmpty {
+                if message.isInterrupted {
+                    retryButton
+                } else if !message.content.isEmpty {
                     copyButton
                 }
             }
@@ -210,6 +239,30 @@ struct MessageBubble: View {
             // AI 消息：右侧弹性空间，把气泡留在左边
             if message.role == .assistant {
                 Spacer(minLength: 32)
+            }
+        }
+    }
+
+    // MARK: 中断重试按钮（网络中断内容已保存时显示）
+    private var retryButton: some View {
+        HStack(spacing: 6) {
+            Button {
+                onRetry?()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11))
+                    Text("重新生成")
+                        .font(.system(size: 12))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(Color.blue.opacity(0.12)))
+                .foregroundColor(.blue)
+            }
+            .buttonStyle(.plain)
+            if !message.content.isEmpty {
+                copyButton
             }
         }
     }
@@ -286,10 +339,12 @@ struct MessageBubble: View {
     }
 }
 
-// MARK: - 滚动位置检测（判断用户是否在底部附近）
-struct ScrollBottomKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
+// MARK: - 滚动策略说明
+// v18 起不再使用 GeometryReader/preference 检测滚动位置：
+// SwiftUI ScrollView 滚动时不会重新布局内容，preference 拿到的 frame
+// 在滚动期间不更新，导致"是否在底部"永远误判为 true，AI 内容一更新
+// 就把用户拉回底部。v18 改为 DragGesture 手势检测 + "回到底部"按钮：
+//   1. 用户上翻（手指向下滑）→ userScrolledUp=true，停止自动跟随
+//   2. 生成中新内容到达 → 仅当 !userScrolledUp 时才滚到底部
+//   3. 用户发新消息 → 强制滚底并恢复跟随
+//   4. 上翻时显示"回到底部"浮动按钮，点击恢复
