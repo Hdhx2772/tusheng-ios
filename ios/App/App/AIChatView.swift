@@ -1,99 +1,91 @@
 import SwiftUI
+import UIKit
 
-// MARK: - AI 对话主界面
+// MARK: - AI 聊天详情页（由会话列表 push 进入，不再自带 NavigationView）
 struct AIChatView: View {
+    @ObservedObject var store: ChatStore
     @StateObject private var viewModel: AIChatViewModel
     @FocusState private var isInputFocused: Bool
-    @Environment(\.presentationMode) private var presentationMode
 
-    private let deviceCode: String
+    private let sessionId: UUID
 
-    init(deviceCode: String) {
-        self.deviceCode = deviceCode
-        _viewModel = StateObject(wrappedValue: AIChatViewModel(deviceCode: deviceCode))
+    init(store: ChatStore, sessionId: UUID) {
+        self.store = store
+        self.sessionId = sessionId
+        _viewModel = StateObject(wrappedValue: AIChatViewModel(store: store, sessionId: sessionId))
     }
+
+    private var session: ChatSession? { store.session(sessionId) }
+    private var messages: [ChatMessage] { session?.messages ?? [] }
 
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // 消息列表
-                messageList
-
-                // 输入区域
-                inputBar
-            }
-            .navigationBarTitle("AI 对话")
-
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("关闭") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button(role: .destructive) {
-                            viewModel.clearChat()
-                        } label: {
-                            Label("清空对话", systemImage: "trash")
-                        }
+        VStack(spacing: 0) {
+            messageList
+            inputBar
+        }
+        .navigationTitle(session?.title ?? "对话")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button(role: .destructive) {
+                        viewModel.clearChat()
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        Label("清空当前对话", systemImage: "trash")
                     }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
-            }
-            .alert("提示", isPresented: $viewModel.showAuthAlert) {
-                Button("确定", role: .cancel) { }
-            } message: {
-                Text(viewModel.authMessage)
-            }
-            // 打开界面时只检查一次授权，本次会话内缓存结果
-            .task {
-                await viewModel.checkAuthOnOpen()
             }
         }
+        .alert("提示", isPresented: $store.showAuthAlert) {
+            Button("确定", role: .cancel) { }
+        } message: {
+            Text(store.authMessage)
+        }
     }
-    
+
     // MARK: - 消息列表
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    if viewModel.messages.isEmpty {
+                    if messages.isEmpty {
                         emptyState
                     } else {
-                        ForEach(viewModel.messages) { message in
+                        ForEach(messages) { message in
                             MessageBubble(message: message)
                                 .id(message.id)
                         }
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 14)
                 .padding(.vertical, 12)
             }
-            .onChange(of: viewModel.messages.count) { _ in
-                if let lastMessage = viewModel.messages.last {
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                    }
-                }
+            .onChange(of: messages.count) { _ in
+                scrollToBottom(proxy)
             }
-            .onChange(of: viewModel.messages.last?.content) { _ in
-                if let lastMessage = viewModel.messages.last, lastMessage.isStreaming {
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                    }
+            .onChange(of: messages.last?.content) { _ in
+                if messages.last?.isStreaming == true {
+                    scrollToBottom(proxy)
                 }
             }
             .background(Color(.systemGroupedBackground))
         }
     }
-    
+
+    private func scrollToBottom(_ proxy: ScrollViewProxy) {
+        guard let last = messages.last else { return }
+        withAnimation(.easeOut(duration: 0.2)) {
+            proxy.scrollTo(last.id, anchor: .bottom)
+        }
+    }
+
     // MARK: - 空状态
     private var emptyState: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 14) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 48))
+                .font(.system(size: 46))
                 .foregroundColor(.secondary)
             Text("开始与 AI 对话")
                 .font(.headline)
@@ -103,9 +95,9 @@ struct AIChatView: View {
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 100)
+        .padding(.top, 90)
     }
-    
+
     // MARK: - 输入栏
     private var inputBar: some View {
         VStack(spacing: 0) {
@@ -121,7 +113,7 @@ struct AIChatView: View {
                     )
                     .focused($isInputFocused)
                     .lineLimit(5)
-                
+
                 if viewModel.isLoading {
                     Button {
                         viewModel.stopGeneration()
@@ -138,9 +130,9 @@ struct AIChatView: View {
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.system(size: 32))
-                            .foregroundColor(viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : .blue)
+                            .foregroundColor(canSend ? .blue : .gray)
                     }
-                    .disabled(viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!canSend)
                 }
             }
             .padding(.horizontal, 12)
@@ -148,46 +140,102 @@ struct AIChatView: View {
             .background(Color(.systemBackground))
         }
     }
+
+    private var canSend: Bool {
+        !viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 // MARK: - 消息气泡
 struct MessageBubble: View {
     let message: ChatMessage
-    
+    @State private var copied = false
+
+    private let bubbleMaxWidth = UIScreen.main.bounds.width * 0.78
+
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
+            // 用户消息：左侧弹性空间，把气泡推到右边
+            if message.role == .user {
+                Spacer(minLength: 32)
+            }
+            // AI 消息：头像在最左
             if message.role == .assistant {
                 avatar
             }
-            
+
+            // 气泡 + 复制按钮，整体按角色对齐
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
-                Text(message.content.isEmpty && message.isStreaming ? "思考中..." : message.content)
-                    .font(.body)
-                    .foregroundColor(message.role == .user ? .white : .primary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(message.role == .user ? Color.blue : Color(.systemGray6))
-                    )
-                    .textSelection(.enabled)
-                
-                if message.isStreaming {
-                    ProgressView()
-                        .controlSize(.small)
-                        .padding(.trailing, message.role == .user ? 8 : 0)
-                        .padding(.leading, message.role == .assistant ? 8 : 0)
+                bubble
+                if !message.content.isEmpty {
+                    copyButton
                 }
             }
-            
-            if message.role == .user {
-                Spacer(minLength: 40)
-            } else {
-                Spacer(minLength: 0)
+            .frame(maxWidth: bubbleMaxWidth, alignment: message.role == .user ? .trailing : .leading)
+
+            // AI 消息：右侧弹性空间，把气泡留在左边
+            if message.role == .assistant {
+                Spacer(minLength: 32)
             }
         }
     }
-    
+
+    // MARK: 气泡本体
+    @ViewBuilder
+    private var bubble: some View {
+        if message.content.isEmpty && message.isStreaming {
+            // 思考中：转圈 + 提示
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("思考中…")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(.systemGray6))
+            )
+        } else {
+            Text(message.content)
+                .font(.body)
+                .foregroundColor(message.role == .user ? .white : .primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(message.role == .user ? Color.blue : Color(.systemGray6))
+                )
+                .textSelection(.enabled)
+        }
+    }
+
+    // MARK: 复制按钮（每个气泡都有）
+    private var copyButton: some View {
+        Button {
+            UIPasteboard.general.string = message.content
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            withAnimation(.easeInOut(duration: 0.15)) { copied = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                withAnimation(.easeInOut(duration: 0.2)) { copied = false }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
+                    .font(.system(size: 11))
+                if copied {
+                    Text("已复制")
+                        .font(.system(size: 11))
+                }
+            }
+            .foregroundColor(copied ? .green : .secondary)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: AI 头像
     private var avatar: some View {
         Circle()
             .fill(LinearGradient(

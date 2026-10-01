@@ -26,9 +26,11 @@ public class AIChatPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
 
-            NSLog("🔍 AIChatPlugin 开始创建聊天界面")
-            let chatView = AIChatView(deviceCode: deviceCode)
-            let hostingController = UIHostingController(rootView: chatView)
+            NSLog("🔍 AIChatPlugin 开始创建 AI 对话独立界面（会话列表）")
+            // 根视图为会话历史列表（内部含 NavigationView，可 push 进入聊天详情），
+            // 形成完整的应用级导航栈，而非盖在网页上的单层浮窗。
+            let listView = AIChatListView(deviceCode: deviceCode)
+            let hostingController = UIHostingController(rootView: listView)
             hostingController.modalPresentationStyle = .fullScreen
 
             if let rootVC = self.bridge?.viewController {

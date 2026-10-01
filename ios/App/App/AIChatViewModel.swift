@@ -1,163 +1,61 @@
 import Foundation
 
-// MARK: - 聊天消息模型
-struct ChatMessage: Identifiable, Equatable {
-    let id = UUID()
-    let role: MessageRole
-    var content: String
-    var isStreaming: Bool = false
-
-    enum MessageRole: String {
-        case user
-        case assistant
-        case system
-    }
-}
-
-// MARK: - SSE 事件模型
-struct SSEEvent: Decodable {
-    let type: String
-    let chat_id: String?
-    let message_id: String?
-    let speaker: String?
-    let turn: Int?
-    let chunk: String?
-    let content: String?
-    let msg: String?
-}
-
-// MARK: - AI 聊天 ViewModel
+// MARK: - AI 聊天 ViewModel（绑定到某个会话，流式逻辑）
 @MainActor
 final class AIChatViewModel: ObservableObject {
-    @Published var messages: [ChatMessage] = []
-    @Published var isLoading: Bool = false
-    @Published var inputText: String = ""
-    @Published var showAuthAlert: Bool = false
-    @Published var authMessage: String = ""
-    @Published var isCheckingAuth: Bool = true
+    @Published var isLoading = false
+    @Published var inputText = ""
 
-    private var chatId: String? = nil
-    private var urlSession: URLSession?
+    let sessionId: UUID
+    private weak var store: ChatStore?
+    private var streamSession: URLSession?
     private var dataTask: URLSessionDataTask?
     private var sseDelegate: SSEDelegate?
 
-    // 授权状态缓存：打开界面时只验证一次，本次会话内不再重复请求授权接口
-    private var hasCheckedAuth = false
-    private var authorized = false
+    // 关键修复：nottrack.ai 在国内 DNS 无法解析（实测直连失败、永久“思考中”），
+    // 官方备用域名 nottrack.com 接口完全相同，国内直连实测 HTTP 200 且 SSE 正常。
+    private let apiURL = "https://nottrack.com/api/dispatch"
 
-    // 授权配置
-    private let authURL = "https://wutong.xyz/api_ai_record.php"
-    private let recordURL = "https://wutong.xyz/api_ai_record.php"
-    private let apiURL = "https://nottrack.ai/api/dispatch"
-
-    // 设备码：由 JS 端从 localStorage 读取后传入，与图片生成模块共用同一个已授权设备码
-    private let deviceCode: String
-
-    init(deviceCode: String) {
-        self.deviceCode = deviceCode
-        // 普通请求用的 session
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        urlSession = URLSession(configuration: config)
+    init(store: ChatStore, sessionId: UUID) {
+        self.store = store
+        self.sessionId = sessionId
     }
 
-    // MARK: - 打开界面时检查一次授权
-    func checkAuthOnOpen() async {
-        guard !hasCheckedAuth else { return }
-        isCheckingAuth = true
-        authorized = await checkAuthorization()
-        hasCheckedAuth = true
-        isCheckingAuth = false
-        if !authorized {
-            authMessage = "当前设备未授权，请联系管理员授权后使用\n设备码：\(deviceCode)"
-            showAuthAlert = true
-        }
-    }
-
-    // MARK: - 检查授权
-    func checkAuthorization() async -> Bool {
-        guard let url = URL(string: authURL), !deviceCode.isEmpty else { return false }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-
-        let body = "action=check_auth&device_id=\(deviceCode)"
-        request.httpBody = body.data(using: .utf8)
-
-        do {
-            let (data, _) = try await urlSession!.data(for: request)
-            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                if let banned = json["status"] as? String, banned == "banned" {
-                    authMessage = json["reason"] as? String ?? "设备已被封禁"
-                    showAuthAlert = true
-                    return false
-                }
-                return json["authorized"] as? Bool ?? false
-            }
-        } catch {
-            print("授权检查失败: \(error)")
-        }
-        return false
-    }
-
-    // MARK: - 记录使用（复用后台 upload 动作，后台可见记录并累加使用次数）
-    private func recordUsage(prompt: String) async {
-        guard let url = URL(string: recordURL), !deviceCode.isEmpty else { return }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-
-        var components = URLComponents()
-        components.queryItems = [
-            URLQueryItem(name: "action", value: "upload"),
-            URLQueryItem(name: "device_id", value: deviceCode),
-            URLQueryItem(name: "prompt", value: "[AI对话] " + prompt)
-        ]
-        request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
-
-        _ = try? await urlSession!.data(for: request)
+    var messages: [ChatMessage] {
+        store?.session(sessionId)?.messages ?? []
     }
 
     // MARK: - 发送消息
     func sendMessage() async {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isLoading else { return }
+        guard let store = store else { return }
 
-        // 授权在打开界面时已检查并缓存，这里直接用缓存结果；若尚未检查则补一次
-        if !hasCheckedAuth {
-            authorized = await checkAuthorization()
-            hasCheckedAuth = true
-        }
-        guard authorized else {
-            authMessage = "当前设备未授权，请联系管理员授权后使用\n设备码：\(deviceCode)"
-            showAuthAlert = true
+        guard store.authorized else {
+            store.authMessage = "当前设备未授权，请联系管理员授权后使用\n设备码：\(store.deviceCode)"
+            store.showAuthAlert = true
             return
         }
 
         inputText = ""
         isLoading = true
 
-        // 添加用户消息
-        let userMessage = ChatMessage(role: .user, content: text)
-        messages.append(userMessage)
-
-        // 添加 AI 占位消息
-        let assistantMessage = ChatMessage(role: .assistant, content: "", isStreaming: true)
-        messages.append(assistantMessage)
+        // 用户消息 + AI 占位气泡
+        store.appendMessage(ChatMessage(role: .user, content: text), to: sessionId)
+        store.appendMessage(ChatMessage(role: .assistant, content: "", isStreaming: true), to: sessionId)
 
         // 后台记录使用
-        await recordUsage(prompt: text)
+        await store.recordUsage(prompt: text)
 
-        // 发送流式请求
+        // 发起流式请求
         await sendStreamRequest(text: text)
     }
 
-    // MARK: - 发送 SSE 流式请求
+    // MARK: - SSE 流式请求
     private func sendStreamRequest(text: String) async {
         guard let url = URL(string: apiURL) else {
-            finishWithError("无效的 API 地址")
+            store?.failAssistant("无效的 API 地址", id: sessionId)
+            isLoading = false
             return
         }
 
@@ -165,9 +63,12 @@ final class AIChatViewModel: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/147.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
-        request.setValue("https://nottrack.ai", forHTTPHeaderField: "Origin")
-        request.setValue("https://nottrack.ai/zh-CN/chat", forHTTPHeaderField: "Referer")
+        request.setValue("https://nottrack.com", forHTTPHeaderField: "Origin")
+        request.setValue("https://nottrack.com/zh-CN/chat", forHTTPHeaderField: "Referer")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 60
 
+        let chatId = store?.session(sessionId)?.nottrackChatId
         let payload: [String: Any] = [
             "user_input": text,
             "mode": "usual",
@@ -181,125 +82,158 @@ final class AIChatViewModel: ObservableObject {
             "edit_mid": NSNull(),
             "via": "typed"
         ]
-
         request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
 
-        // 创建 SSE delegate
-        let delegate = SSEDelegate { [weak self] event in
-            self?.handleSSEEvent(event)
-        }
+        let sid = sessionId
+        let delegate = SSEDelegate(
+            onEvent: { [weak self] event in
+                Task { @MainActor in self?.handleSSEEvent(event) }
+            },
+            onError: { [weak self] msg in
+                Task { @MainActor in self?.store?.failAssistant(msg, id: sid) }
+            }
+        )
         self.sseDelegate = delegate
 
-        // 流式请求用的 session
-        let streamConfig = URLSessionConfiguration.default
-        streamConfig.timeoutIntervalForRequest = 120
-        streamConfig.timeoutIntervalForResource = 300
-        let streamSession = URLSession(configuration: streamConfig, delegate: delegate, delegateQueue: .main)
+        let cfg = URLSessionConfiguration.default
+        cfg.timeoutIntervalForRequest = 60
+        cfg.timeoutIntervalForResource = 180
+        let session = URLSession(configuration: cfg, delegate: delegate, delegateQueue: .main)
+        self.streamSession = session
 
-        // 使用 withCheckedContinuation 等待任务完成
-        await withCheckedContinuation { continuation in
-            delegate.onComplete = {
-                continuation.resume()
-            }
+        NSLog("🚀 [SSE] 开始请求 \(self.apiURL)，续聊 chat_id: \(chatId ?? "首轮(nil)")")
 
-            let task = streamSession.dataTask(with: request)
+        // 等待连接结束（成功或失败都会回调 onComplete）
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            delegate.onComplete = { continuation.resume() }
+            let task = session.dataTask(with: request)
             self.dataTask = task
             task.resume()
         }
 
+        // 兜底：正常情况下 message/done 已收尾；若占位仍在流式（空响应等），这里补上结束状态
+        store?.markDone(id: sessionId)
         isLoading = false
     }
 
     // MARK: - 处理 SSE 事件
     private func handleSSEEvent(_ event: SSEEvent) {
+        guard let store = store else { return }
         switch event.type {
         case "chat_meta":
-            chatId = event.chat_id
+            if let cid = event.chat_id {
+                store.setNottrackChatId(cid, for: sessionId)
+            }
         case "delta":
-            if let chunk = event.chunk, let index = messages.lastIndex(where: { $0.isStreaming }) {
-                messages[index].content += chunk
+            if let chunk = event.chunk {
+                store.appendDelta(chunk, to: sessionId)
             }
         case "message", "consensus":
-            if let content = event.content, let index = messages.lastIndex(where: { $0.isStreaming }) {
-                messages[index].content = content
-                messages[index].isStreaming = false
-            }
+            store.finishAssistant(content: event.content, id: sessionId)
         case "done":
-            if let index = messages.lastIndex(where: { $0.isStreaming }) {
-                messages[index].isStreaming = false
-            }
+            store.markDone(id: sessionId)
         case "error":
-            finishWithError(event.msg ?? "未知错误")
+            store.failAssistant(event.msg ?? "服务返回错误", id: sessionId)
         default:
+            // thinking / busy / user 等事件无需处理
             break
         }
     }
 
-    // MARK: - 错误处理
-    private func finishWithError(_ message: String) {
-        if let index = messages.lastIndex(where: { $0.isStreaming }) {
-            messages[index].content = "错误: \(message)"
-            messages[index].isStreaming = false
-        }
-        isLoading = false
-    }
-
-    // MARK: - 清空对话
+    // MARK: - 清空当前会话
     func clearChat() {
-        messages.removeAll()
-        chatId = nil
+        store?.clearSession(sessionId)
     }
 
     // MARK: - 停止生成
     func stopGeneration() {
         dataTask?.cancel()
+        store?.markDone(id: sessionId)
         isLoading = false
-        if let index = messages.lastIndex(where: { $0.isStreaming }) {
-            messages[index].isStreaming = false
-        }
     }
 }
 
-// MARK: - SSE URLSession Delegate
+// MARK: - SSE URLSession Delegate（带完整日志与错误回调）
 class SSEDelegate: NSObject, URLSessionDataDelegate {
     private var buffer = ""
     private let onEvent: (SSEEvent) -> Void
+    private let onError: (String) -> Void
     var onComplete: (() -> Void)?
 
-    init(onEvent: @escaping (SSEEvent) -> Void) {
+    private var httpOK = false
+    private var statusCode = 0
+    private var finished = false
+
+    init(onEvent: @escaping (SSEEvent) -> Void, onError: @escaping (String) -> Void) {
         self.onEvent = onEvent
+        self.onError = onError
     }
 
+    // 收到响应头：记录状态码
+    func urlSession(_ session: URLSession,
+                    dataTask: URLSessionDataTask,
+                    didReceive response: URLResponse,
+                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        if let http = response as? HTTPURLResponse {
+            statusCode = http.statusCode
+            httpOK = (200...299).contains(http.statusCode)
+            NSLog("🔵 [SSE] 响应状态: \(http.statusCode)，Content-Type: \(http.mimeType ?? "-")")
+        }
+        completionHandler(.allow)
+    }
+
+    // 收到数据：按 SSE 协议切分事件
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         guard let text = String(data: data, encoding: .utf8) else { return }
         buffer += text
+        // 统一换行符，兼容 \r\n / \r
+        buffer = buffer.replacingOccurrences(of: "\r\n", with: "\n")
+                       .replacingOccurrences(of: "\r", with: "\n")
 
-        // 按空行分割事件
-        let events = buffer.components(separatedBy: "\n\n")
-        buffer = events.last ?? ""
+        let blocks = buffer.components(separatedBy: "\n\n")
+        buffer = blocks.last ?? ""
 
-        for eventText in events.dropLast() {
-            let lines = eventText.components(separatedBy: "\n")
+        for block in blocks.dropLast() {
+            let lines = block.components(separatedBy: "\n")
             for line in lines {
-                if line.hasPrefix("data: ") {
-                    let jsonString = String(line.dropFirst(6))
-                    if let jsonData = jsonString.data(using: .utf8),
-                       let event = try? JSONDecoder().decode(SSEEvent.self, from: jsonData) {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.onEvent(event)
-                        }
-                    }
+                var l = line
+                guard l.hasPrefix("data:") else { continue }
+                l = String(l.dropFirst(5))
+                if l.hasPrefix(" ") { l = String(l.dropFirst()) }
+                guard let jsonData = l.data(using: .utf8),
+                      let event = try? JSONDecoder().decode(SSEEvent.self, from: jsonData) else {
+                    NSLog("⚠️ [SSE] 无法解析: \(l.prefix(120))")
+                    continue
                 }
+                NSLog("🟢 [SSE] 事件: \(event.type)")
+                onEvent(event)
             }
         }
     }
 
+    // 请求结束（成功 error=nil；失败/取消携带 error）
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let error = error {
-            print("请求完成，错误: \(error)")
+            let ns = error as NSError
+            if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled {
+                NSLog("🟡 [SSE] 请求被取消（用户停止）")
+            } else {
+                NSLog("🔴 [SSE] 请求错误: \(error.localizedDescription)（\(ns.domain) \(ns.code)）")
+                onError(error.localizedDescription)
+            }
+        } else if !httpOK {
+            NSLog("🔴 [SSE] HTTP 异常状态码: \(statusCode)")
+            onError("服务器返回状态码 \(statusCode)")
+        } else {
+            NSLog("✅ [SSE] 请求正常结束")
         }
+
         DispatchQueue.main.async { [weak self] in
-            self?.onComplete?()
+            guard let self = self else { return }
+            if !self.finished {
+                self.finished = true
+                self.onComplete?()
+            }
         }
     }
 }
