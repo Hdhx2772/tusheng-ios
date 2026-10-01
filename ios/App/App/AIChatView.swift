@@ -7,6 +7,10 @@ struct AIChatView: View {
     @StateObject private var viewModel: AIChatViewModel
     @FocusState private var isInputFocused: Bool
 
+    // 是否在底部附近：用户在底部时才自动跟随滚动，上翻看历史时不打扰
+    @State private var isNearBottom = true
+    private let bottomAnchorID = "bottom_anchor"
+
     private let sessionId: UUID
 
     init(store: ChatStore, sessionId: UUID) {
@@ -47,30 +51,57 @@ struct AIChatView: View {
 
     // MARK: - 消息列表
     private var messageList: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 12) {
-                    if messages.isEmpty {
-                        emptyState
-                    } else {
-                        ForEach(messages) { message in
-                            MessageBubble(message: message)
-                                .id(message.id)
+        GeometryReader { outer in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        if messages.isEmpty {
+                            emptyState
+                        } else {
+                            ForEach(messages) { message in
+                                MessageBubble(message: message)
+                                    .id(message.id)
+                            }
                         }
+                        // 底部锚点：用于判断当前滚动位置
+                        Color.clear
+                            .frame(height: 1)
+                            .id(bottomAnchorID)
+                            .background(
+                                GeometryReader { geo in
+                                    Color.clear.preference(
+                                        key: ScrollOffsetKey.self,
+                                        value: geo.frame(in: .named("chatScroll")).maxY
+                                    )
+                                }
+                            )
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                }
+                .coordinateSpace(name: "chatScroll")
+                .onPreferenceChange(ScrollOffsetKey.self) { maxY in
+                    // 内容底部 maxY：在底部时 ≈ ScrollView 可视高度；
+                    // 上翻时 maxY 变大（内容底部移出可视区）
+                    let bottom = outer.size.height
+                    isNearBottom = maxY <= bottom + 120
+                }
+                .onChange(of: messages.count) { _ in
+                    // 用户刚发出消息 → 强制滚到底部看到自己的消息
+                    // AI 新增占位气泡 → 仅当已在底部时才跟随，不打扰上翻的用户
+                    if messages.last?.role == .user {
+                        scrollToBottom(proxy)
+                    } else if isNearBottom {
+                        scrollToBottom(proxy)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-            }
-            .onChange(of: messages.count) { _ in
-                scrollToBottom(proxy)
-            }
-            .onChange(of: messages.last?.content) { _ in
-                if messages.last?.isStreaming == true {
-                    scrollToBottom(proxy)
+                .onChange(of: messages.last?.content) { _ in
+                    if messages.last?.isStreaming == true && isNearBottom {
+                        scrollToBottom(proxy)
+                    }
                 }
+                .background(Color(.systemGroupedBackground))
             }
-            .background(Color(.systemGroupedBackground))
         }
     }
 
@@ -249,5 +280,13 @@ struct MessageBubble: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
             )
+    }
+}
+
+// MARK: - 滚动位置检测（判断用户是否在底部附近）
+struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }

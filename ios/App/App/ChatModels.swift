@@ -215,6 +215,22 @@ final class ChatStore: ObservableObject {
         }
     }
 
+    // 网络中断但已有部分内容：保留已生成内容，追加中断提示，不覆盖
+    func markInterrupted(id: UUID) {
+        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
+        if let mi = sessions[i].messages.lastIndex(where: { $0.isStreaming }) {
+            let current = sessions[i].messages[mi].content
+            if current.isEmpty {
+                sessions[i].messages[mi].content = "请求失败：网络中断"
+            } else {
+                sessions[i].messages[mi].content = current + "\n\n⚠️ 网络中断，内容可能不完整"
+            }
+            sessions[i].messages[mi].isStreaming = false
+            touch(i)
+            save()
+        }
+    }
+
     // MARK: - 打开界面时检查一次授权（本次打开期间缓存，不重复请求）
     func checkAuthOnOpen() async {
         guard !hasCheckedAuth else { return }

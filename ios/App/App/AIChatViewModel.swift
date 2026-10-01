@@ -12,6 +12,12 @@ final class AIChatViewModel: ObservableObject {
     private var dataTask: URLSessionDataTask?
     private var sseDelegate: SSEDelegate?
 
+    // 自动重连：网络中断（切后台/断网）时自动恢复，避免直接显示"生成失败"
+    private var pendingText: String?          // 当前请求的文本，用于重连
+    private var retryCount = 0
+    private let maxRetry = 2                  // 最多自动重连 2 次
+    private var isRetrying = false            // 当前请求已被重连接管，收尾时跳过
+
     // 关键修复：nottrack.ai 在国内 DNS 无法解析（实测直连失败、永久“思考中”），
     // 官方备用域名 nottrack.com 接口完全相同，国内直连实测 HTTP 200 且 SSE 正常。
     private let apiURL = "https://nottrack.com/api/dispatch"
@@ -39,6 +45,8 @@ final class AIChatViewModel: ObservableObject {
 
         inputText = ""
         isLoading = true
+        pendingText = text
+        retryCount = 0
 
         // 用户消息 + AI 占位气泡
         store.appendMessage(ChatMessage(role: .user, content: text), to: sessionId)
@@ -52,9 +60,12 @@ final class AIChatViewModel: ObservableObject {
     }
 
     // MARK: - SSE 流式请求
-    private func sendStreamRequest(text: String) async {
+    // isRetry=true 表示自动重连：不再新增占位气泡，复用现有 streaming 气泡继续输出
+    private func sendStreamRequest(text: String, isRetry: Bool = false) async {
         guard let url = URL(string: apiURL) else {
-            store?.failAssistant("无效的 API 地址", id: sessionId)
+            if !isRetry {
+                store?.failAssistant("无效的 API 地址", id: sessionId)
+            }
             isLoading = false
             return
         }
@@ -66,7 +77,7 @@ final class AIChatViewModel: ObservableObject {
         request.setValue("https://nottrack.com", forHTTPHeaderField: "Origin")
         request.setValue("https://nottrack.com/zh-CN/chat", forHTTPHeaderField: "Referer")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        request.timeoutInterval = 60
+        request.timeoutInterval = 120
 
         let chatId = store?.session(sessionId)?.nottrackChatId
         let payload: [String: Any] = [
@@ -89,19 +100,24 @@ final class AIChatViewModel: ObservableObject {
             onEvent: { [weak self] event in
                 Task { @MainActor in self?.handleSSEEvent(event) }
             },
-            onError: { [weak self] msg in
-                Task { @MainActor in self?.store?.failAssistant(msg, id: sid) }
+            onError: { [weak self] msg, error in
+                Task { @MainActor in self?.handleStreamError(msg, error: error) }
             }
         )
         self.sseDelegate = delegate
 
         let cfg = URLSessionConfiguration.default
-        cfg.timeoutIntervalForRequest = 60
-        cfg.timeoutIntervalForResource = 180
+        cfg.timeoutIntervalForRequest = 300    // 两次数据到达之间的空闲超时，长文本思考期可能较长
+        cfg.timeoutIntervalForResource = 900   // 总时长上限 15 分钟，避免长文本生成超时
+        cfg.waitsForConnectivity = true        // 网络恢复后自动继续（切后台/断网恢复）
         let session = URLSession(configuration: cfg, delegate: delegate, delegateQueue: .main)
         self.streamSession = session
 
-        NSLog("🚀 [SSE] 开始请求 \(self.apiURL)，续聊 chat_id: \(chatId ?? "首轮(nil)")")
+        if isRetry {
+            NSLog("🔄 [SSE] 自动重连请求，续聊 chat_id: \(chatId ?? "首轮(nil)")")
+        } else {
+            NSLog("🚀 [SSE] 开始请求 \(self.apiURL)，续聊 chat_id: \(chatId ?? "首轮(nil)")")
+        }
 
         // 等待连接结束（成功或失败都会回调 onComplete）
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -111,8 +127,53 @@ final class AIChatViewModel: ObservableObject {
             task.resume()
         }
 
-        // 兜底：正常情况下 message/done 已收尾；若占位仍在流式（空响应等），这里补上结束状态
+        // 兜底：正常情况下 message/done 已收尾；若占位仍在流式（空响应等），这里补上结束状态。
+        // 注意：若本请求已被错误处理器标记为"重连接管"，则跳过收尾，
+        // 避免把占位气泡提前结束、导致重连后的 delta 无处追加。
+        if isRetrying {
+            isRetrying = false
+            return
+        }
         store?.markDone(id: sessionId)
+        isLoading = false
+    }
+
+    // MARK: - 处理 SSE 错误（含自动重连逻辑）
+    private func handleStreamError(_ msg: String, error: Error?) {
+        let nsError = error as NSError?
+        let code = nsError?.code ?? -1
+        // 可恢复的网络类错误：切后台连接被系统断开、断网、超时等
+        let recoverableCodes: [Int] = [
+            NSURLErrorTimedOut,                // -1001
+            NSURLErrorCannotFindHost,          // -1003
+            NSURLErrorCannotConnectToHost,     // -1004
+            NSURLErrorNetworkConnectionLost,   // -1005
+            NSURLErrorDNSLookupFailed,         // -1006
+            NSURLErrorNotConnectedToInternet,  // -1009
+            NSURLErrorInternationalRoamingOff  // -1018
+        ]
+        let isRecoverable = recoverableCodes.contains(code)
+        let hasContent = !(store?.session(sessionId)?.messages.last?.content.isEmpty ?? true)
+
+        if isRecoverable && !hasContent && retryCount < maxRetry {
+            // 尚未收到任何内容就断了（思考中/刚开始），自动重连继续
+            retryCount += 1
+            let text = pendingText ?? ""
+            isRetrying = true   // 标记旧请求被接管，避免其收尾提前结束占位气泡
+            NSLog("🔄 [SSE] 网络错误(\(code))，自动重连 \(retryCount)/\(maxRetry)")
+            Task { await sendStreamRequest(text: text, isRetry: true) }
+            return
+        }
+
+        if isRecoverable && hasContent {
+            // 已生成部分内容：保留内容并标记中断，不覆盖成"请求失败"
+            store?.markInterrupted(id: sessionId)
+            isLoading = false
+            return
+        }
+
+        // 其他错误：正常失败提示
+        store?.failAssistant(msg, id: sessionId)
         isLoading = false
     }
 
@@ -157,14 +218,14 @@ final class AIChatViewModel: ObservableObject {
 class SSEDelegate: NSObject, URLSessionDataDelegate {
     private var buffer = ""
     private let onEvent: (SSEEvent) -> Void
-    private let onError: (String) -> Void
+    private let onError: (String, Error?) -> Void
     var onComplete: (() -> Void)?
 
     private var httpOK = false
     private var statusCode = 0
     private var finished = false
 
-    init(onEvent: @escaping (SSEEvent) -> Void, onError: @escaping (String) -> Void) {
+    init(onEvent: @escaping (SSEEvent) -> Void, onError: @escaping (String, Error?) -> Void) {
         self.onEvent = onEvent
         self.onError = onError
     }
@@ -184,7 +245,10 @@ class SSEDelegate: NSObject, URLSessionDataDelegate {
 
     // 收到数据：按 SSE 协议切分事件
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        guard let text = String(data: data, encoding: .utf8) else { return }
+        // 关键修复：不能用 String(data:encoding:) —— UTF-8 多字节字符被拆到两个
+        // data 块时会解码失败返回 nil，导致整块数据丢失（长文本生成时必现）。
+        // String(decoding:as:) 永不解码失败，可安全拼接。
+        let text = String(decoding: data, as: UTF8.self)
         buffer += text
         // 统一换行符，兼容 \r\n / \r
         buffer = buffer.replacingOccurrences(of: "\r\n", with: "\n")
@@ -219,11 +283,11 @@ class SSEDelegate: NSObject, URLSessionDataDelegate {
                 NSLog("🟡 [SSE] 请求被取消（用户停止）")
             } else {
                 NSLog("🔴 [SSE] 请求错误: \(error.localizedDescription)（\(ns.domain) \(ns.code)）")
-                onError(error.localizedDescription)
+                onError(error.localizedDescription, error)
             }
         } else if !httpOK {
             NSLog("🔴 [SSE] HTTP 异常状态码: \(statusCode)")
-            onError("服务器返回状态码 \(statusCode)")
+            onError("服务器返回状态码 \(statusCode)", nil)
         } else {
             NSLog("✅ [SSE] 请求正常结束")
         }
