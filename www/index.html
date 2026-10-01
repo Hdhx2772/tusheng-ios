@@ -473,11 +473,24 @@ async function generateSig(params) {
 }
 
 // 给 XHR 添加签名请求头
+// 【兼容修复】Android WebView 在非安全上下文（旧版 APK 用 file/http 协议、或系统 WebView 版本过低）
+// 下 crypto.subtle 为 undefined，原代码直接调用会抛 TypeError，导致后续 xhr.send() 永不执行、
+// loading 永久常驻（"一直加载中"且请求不到服务器）。
+// 现在：crypto.subtle 不可用或签名生成失败时静默跳过签名头——后端 ai_edit.php 对 Android
+// （UA 含 android/okhttp）本就跳过签名校验，不影响请求；iOS 安全上下文下签名正常生成。
 async function addSigToXhr(xhr, params) {
-    var sig = await generateSig(params);
-    xhr.setRequestHeader('X-Auth-Timestamp', sig.timestamp);
-    xhr.setRequestHeader('X-Auth-Nonce', sig.nonce);
-    xhr.setRequestHeader('X-Auth-Signature', sig.sign);
+    try {
+        if (!window.crypto || !crypto.subtle) {
+            if (typeof debugLog === 'function') debugLog('crypto.subtle 不可用，跳过签名头', 'WARN');
+            return;
+        }
+        var sig = await generateSig(params);
+        xhr.setRequestHeader('X-Auth-Timestamp', sig.timestamp);
+        xhr.setRequestHeader('X-Auth-Nonce', sig.nonce);
+        xhr.setRequestHeader('X-Auth-Signature', sig.sign);
+    } catch (e) {
+        if (typeof debugLog === 'function') debugLog('签名生成失败，跳过签名头: ' + e.message, 'WARN');
+    }
 }
 // ========== API 签名验证结束 ==========
 var APP_VERSION = '1.1';

@@ -6,6 +6,9 @@ struct AIChatListView: View {
     @Environment(\.presentationMode) private var presentationMode
     // 用于“新建聊天”后的程序化跳转
     @State private var newSessionId: UUID?
+    // 长按删除：待删除的会话与确认弹窗开关
+    @State private var sessionToDelete: ChatSession?
+    @State private var showDeleteConfirm = false
 
     init(deviceCode: String) {
         _store = StateObject(wrappedValue: ChatStore(deviceCode: deviceCode))
@@ -42,6 +45,17 @@ struct AIChatListView: View {
                 Button("确定", role: .cancel) { }
             } message: {
                 Text(store.authMessage)
+            }
+            .alert("删除对话", isPresented: $showDeleteConfirm) {
+                Button("取消", role: .cancel) { sessionToDelete = nil }
+                Button("删除", role: .destructive) {
+                    if let s = sessionToDelete {
+                        store.deleteSession(s.id)
+                    }
+                    sessionToDelete = nil
+                }
+            } message: {
+                Text("确定要删除「\(sessionToDelete?.title ?? "")」吗？此操作不可撤销。")
             }
             .task {
                 await store.checkAuthOnOpen()
@@ -118,6 +132,11 @@ struct AIChatListView: View {
                 .foregroundColor(.secondary)
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onLongPressGesture(minimumDuration: 0.5) {
+            sessionToDelete = s
+            showDeleteConfirm = true
+        }
     }
 
     private func previewText(_ s: ChatSession) -> String {
