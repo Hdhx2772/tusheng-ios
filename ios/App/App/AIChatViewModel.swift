@@ -155,18 +155,22 @@ final class AIChatViewModel: ObservableObject {
         let isRecoverable = recoverableCodes.contains(code)
         let hasContent = !(store?.session(sessionId)?.messages.last?.content.isEmpty ?? true)
 
-        if isRecoverable && !hasContent && retryCount < maxRetry {
-            // 尚未收到任何内容就断了（思考中/刚开始），自动重连继续
+        if isRecoverable && retryCount < maxRetry {
+            // 自动重连：无论是否已有内容都重试一次。
+            // 若已有部分内容，先清空占位重新生成完整回复，避免内容错乱/重复。
             retryCount += 1
             let text = pendingText ?? ""
             isRetrying = true   // 标记旧请求被接管，避免其收尾提前结束占位气泡
+            if hasContent {
+                store?.resetStreamingContent(id: sessionId)
+            }
             NSLog("🔄 [SSE] 网络错误(\(code))，自动重连 \(retryCount)/\(maxRetry)")
             Task { await sendStreamRequest(text: text, isRetry: true) }
             return
         }
 
         if isRecoverable && hasContent {
-            // 已生成部分内容：保留内容并标记中断，不覆盖成"请求失败"
+            // 已重试多次仍失败：保留内容并标记中断，不覆盖成"请求失败"
             store?.markInterrupted(id: sessionId)
             isLoading = false
             return
@@ -204,6 +208,28 @@ final class AIChatViewModel: ObservableObject {
     // MARK: - 清空当前会话
     func clearChat() {
         store?.clearSession(sessionId)
+    }
+
+    // MARK: - 回前台恢复（切后台回来时，若任务已断且占位仍在流式，自动重连）
+    func resumeIfNeeded() {
+        guard isLoading else { return }
+        guard let store = store,
+              store.session(sessionId)?.messages.last?.isStreaming == true else { return }
+        // dataTask 已结束（didComplete 已触发）但占位还在流式 → 连接已断，自动重连
+        guard dataTask == nil || dataTask?.state == .completed else { return }
+        guard retryCount < maxRetry else {
+            store.markInterrupted(id: sessionId)
+            isLoading = false
+            return
+        }
+        retryCount += 1
+        let text = pendingText ?? ""
+        isRetrying = true
+        if !(store.session(sessionId)?.messages.last?.content.isEmpty ?? true) {
+            store.resetStreamingContent(id: sessionId)
+        }
+        NSLog("🔄 [SSE] 回前台恢复，自动重连 \(retryCount)/\(maxRetry)")
+        Task { await sendStreamRequest(text: text, isRetry: true) }
     }
 
     // MARK: - 停止生成

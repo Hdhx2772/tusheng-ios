@@ -231,6 +231,16 @@ final class ChatStore: ObservableObject {
         }
     }
 
+    // 自动重连前清空占位气泡内容（保持 isStreaming=true），重新生成完整回复
+    func resetStreamingContent(id: UUID) {
+        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
+        if let mi = sessions[i].messages.lastIndex(where: { $0.isStreaming }) {
+            sessions[i].messages[mi].content = ""
+            touch(i)
+            save()
+        }
+    }
+
     // MARK: - 打开界面时检查一次授权（本次打开期间缓存，不重复请求）
     func checkAuthOnOpen() async {
         guard !hasCheckedAuth else { return }
