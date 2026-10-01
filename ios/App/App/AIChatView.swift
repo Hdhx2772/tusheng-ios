@@ -7,6 +7,7 @@ struct AIChatView: View {
     @StateObject private var viewModel: AIChatViewModel
     @FocusState private var isInputFocused: Bool
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.presentationMode) private var presentationMode
 
     // 用户是否手动上翻过（看历史）：一旦上翻就停止自动跟随，直到用户发新消息或点"回到底部"
     @State private var userScrolledUp = false
@@ -15,10 +16,13 @@ struct AIChatView: View {
     @State private var lastAutoScrollTime = Date.distantPast
 
     private let sessionId: UUID
+    // 从 Web 历史页直接进入某会话时显示"关闭"按钮（push 进入时用系统返回箭头）
+    private let showCloseButton: Bool
 
-    init(store: ChatStore, sessionId: UUID) {
+    init(store: ChatStore, sessionId: UUID, showCloseButton: Bool = false) {
         self.store = store
         self.sessionId = sessionId
+        self.showCloseButton = showCloseButton
         _viewModel = StateObject(wrappedValue: AIChatViewModel(store: store, sessionId: sessionId))
     }
 
@@ -60,6 +64,13 @@ struct AIChatView: View {
         .navigationTitle(session?.title ?? "对话")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if showCloseButton {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("关闭") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button(role: .destructive) {

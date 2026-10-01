@@ -11,7 +11,10 @@ public class AIChatPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "AIChatPlugin"
     public let jsName = "AIChatPlugin"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "openChat", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "openChat", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "listSessions", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openSession", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clearAllSessions", returnType: CAPPluginReturnPromise)
     ]
 
     @objc public func openChat(_ call: CAPPluginCall) {
@@ -42,6 +45,70 @@ public class AIChatPlugin: CAPPlugin, CAPBridgedPlugin {
                 NSLog("❌ AIChatPlugin 无法获取 rootViewController")
                 call.reject("无法打开聊天界面")
             }
+        }
+    }
+
+    // MARK: - 读取会话列表（供 Web 历史页"文字对话"栏展示）
+    @objc public func listSessions(_ call: CAPPluginCall) {
+        let deviceCode = call.getString("deviceCode") ?? ""
+        NSLog("🔍 AIChatPlugin.listSessions 被调用, deviceCode=\(deviceCode)")
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { call.reject("插件已销毁"); return }
+            let store = ChatStore(deviceCode: deviceCode)
+            let items = store.sortedSessions.map { s -> [String: Any] in
+                let preview = (s.messages.last?.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                return [
+                    "id": s.id.uuidString,
+                    "title": s.title,
+                    "updatedAt": Int(s.updatedAt.timeIntervalSince1970 * 1000),
+                    "preview": String(preview.prefix(60)),
+                    "messageCount": s.messages.count
+                ]
+            }
+            call.resolve(["sessions": items])
+        }
+    }
+
+    // MARK: - 打开指定会话的完整对话界面（Web 历史页点击某组对话进入）
+    @objc public func openSession(_ call: CAPPluginCall) {
+        let deviceCode = call.getString("deviceCode") ?? ""
+        guard let idStr = call.getString("sessionId"),
+              let sessionId = UUID(uuidString: idStr) else {
+            call.reject("无效的会话 ID")
+            return
+        }
+        NSLog("🔍 AIChatPlugin.openSession 被调用, sessionId=\(idStr)")
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else {
+                call.reject("插件已销毁")
+                return
+            }
+            let store = ChatStore(deviceCode: deviceCode)
+            guard store.session(sessionId) != nil else {
+                call.reject("会话不存在")
+                return
+            }
+            let chatView = AIChatView(store: store, sessionId: sessionId, showCloseButton: true)
+            let nav = UINavigationController(rootViewController: UIHostingController(rootView: chatView))
+            nav.modalPresentationStyle = .fullScreen
+            if let rootVC = self.bridge?.viewController {
+                rootVC.present(nav, animated: true)
+                call.resolve(["opened": true])
+            } else {
+                call.reject("无法打开聊天界面")
+            }
+        }
+    }
+
+    // MARK: - 清空全部 AI 对话（Web 历史页"清空文字"）
+    @objc public func clearAllSessions(_ call: CAPPluginCall) {
+        let deviceCode = call.getString("deviceCode") ?? ""
+        NSLog("🔍 AIChatPlugin.clearAllSessions 被调用")
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { call.reject("插件已销毁"); return }
+            let store = ChatStore(deviceCode: deviceCode)
+            store.clearAllSessions()
+            call.resolve(["cleared": true])
         }
     }
 }

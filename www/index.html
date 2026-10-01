@@ -57,8 +57,10 @@ body {
 .preview-card { flex: 1; display: none; flex-direction: column; min-height: 0; padding: 10px; overflow: hidden; }
 .preview-card.show { display: flex; animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toastFade { from { opacity: 0; } to { opacity: 1; } }
 .preview-img { width: 100%; height: 100%; flex: 1; min-height: 0; object-fit: contain; border-radius: 12px; background: rgba(255,255,255,0.1); }
 .preview-actions { display: flex; gap: 8px; margin-top: 8px; }
+.preview-actions .btn { flex: 1; }
 /* 输入区 */
 .input-card { padding: 0; overflow: hidden; }
 .input-row { padding: 11px 14px; border-bottom: 0.5px solid var(--border); }
@@ -167,12 +169,37 @@ body {
 }
 .history-title { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
 .history-clear { font-size: 15px; color: #ff3b30; background: none; border: none; cursor: pointer; font-weight: 500; }
-.history-grid { flex: 1; padding: 0 12px 12px; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.history-scroll { flex: 1; overflow-y: auto; padding: 0 12px 12px; }
+.history-section { margin-bottom: 18px; }
+.history-section-title {
+    font-size: 13px; font-weight: 600; color: var(--text-secondary);
+    padding: 8px 4px 6px; letter-spacing: 0.3px;
+}
+.history-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .history-item { aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: #e5e5ea; cursor: pointer;
     transition: transform 0.15s ease; box-shadow: var(--shadow); }
 .history-item:active { transform: scale(0.95); }
 .history-item img { width: 100%; height: 100%; object-fit: cover; }
-.history-empty { text-align: center; padding: 60px 20px; color: var(--text-secondary); grid-column: 1/-1; font-size: 15px; }
+.history-empty { text-align: center; padding: 40px 20px; color: var(--text-secondary); grid-column: 1/-1; font-size: 14px; }
+.chat-list { display: flex; flex-direction: column; gap: 10px; }
+.chat-item {
+    background: var(--card-bg, #fff); border-radius: 14px; padding: 13px 14px;
+    display: flex; align-items: center; gap: 12px; cursor: pointer;
+    box-shadow: var(--shadow, 0 1px 3px rgba(0,0,0,0.06));
+    transition: transform 0.15s ease;
+}
+.chat-item:active { transform: scale(0.98); }
+.chat-item-icon {
+    width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+    background: linear-gradient(135deg, #8e2de2, #4a00e0);
+    display: flex; align-items: center; justify-content: center; color: #fff;
+}
+.chat-item-icon svg { width: 20px; height: 20px; }
+.chat-item-body { flex: 1; min-width: 0; }
+.chat-item-title { font-size: 15px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-item-preview { font-size: 13px; color: var(--text-secondary); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-item-time { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+.chat-empty { text-align: center; padding: 30px 20px; color: var(--text-secondary); font-size: 14px; }
 /* Tab Bar - 毛玻璃 */
 .tab-bar {
     position: fixed; bottom: calc(8px + env(safe-area-inset-bottom));
@@ -226,7 +253,7 @@ body {
     position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
     background: rgba(0,0,0,0.82); color: #fff; padding: 14px 22px; border-radius: 14px;
     font-size: 14px; z-index: 2000; display: none; max-width: 80%; text-align: center;
-    backdrop-filter: blur(10px); box-shadow: var(--shadow-lg); animation: fadeIn 0.2s ease;
+    backdrop-filter: blur(10px); box-shadow: var(--shadow-lg); animation: toastFade 0.2s ease;
 }
 .toast.show { display: block; }
 /* 授权码 */
@@ -329,9 +356,20 @@ body {
 <div class="history-page" id="pageHistory">
     <div class="history-header">
         <div class="history-title">历史记录</div>
-        <button class="history-clear" onclick="clearHistory()">清空</button>
+        <button class="history-clear" onclick="clearHistoryAll()">清空</button>
     </div>
-    <div class="history-grid" id="historyGrid"></div>
+    <div class="history-scroll">
+        <!-- 图片记录栏 -->
+        <div class="history-section">
+            <div class="history-section-title">图片记录</div>
+            <div class="history-grid" id="historyGrid"></div>
+        </div>
+        <!-- 文字对话栏 -->
+        <div class="history-section">
+            <div class="history-section-title">AI 对话</div>
+            <div class="chat-list" id="chatHistoryList"></div>
+        </div>
+    </div>
 </div>
 
 <!-- Tab Bar -->
@@ -709,9 +747,34 @@ function openAIChat() {
         showToast('当前版本不支持 AI 对话');
         return;
     }
+    var devCode = getDeviceCode();
+    debugLog('AI对话前检查授权，设备码: ' + devCode, 'INFO');
+    var xhrAuth = new XMLHttpRequest();
+    xhrAuth.open('POST', API_BASE + '/api_ai_record.php', true);
+    xhrAuth.timeout = 30000;
+    addSigToXhr(xhrAuth, { action: 'check_auth', device_id: devCode });
+    xhrAuth.onload = function() {
+        try {
+            var authData = JSON.parse(xhrAuth.responseText);
+            if (authData.status === 'banned') { showBanModal(authData.reason); return; }
+            if (!authData.authorized) { debugLog('AI对话: 未授权，显示授权弹窗', 'WARN'); showAuthModal(); return; }
+            debugLog('AI对话: 授权通过，打开原生界面', 'SUCCESS');
+            doOpenAIChat(devCode);
+        } catch(e) {
+            showToast('授权解析错误');
+        }
+    };
+    xhrAuth.onerror = function() { showToast('授权网络异常，请检查网络'); };
+    xhrAuth.ontimeout = function() { showToast('授权检查超时，请重试'); };
+    var fdAuth = new FormData();
+    fdAuth.append('action', 'check_auth');
+    fdAuth.append('device_id', devCode);
+    xhrAuth.send(fdAuth);
+}
+
+function doOpenAIChat(devCode) {
     try {
-        // 传入当前设备码，原生端复用同一个已授权设备，无需重复授权
-        Capacitor.Plugins.AIChatPlugin.openChat({ deviceCode: getDeviceCode() })
+        Capacitor.Plugins.AIChatPlugin.openChat({ deviceCode: devCode })
             .then(function(res) {
                 debugLog('AI 对话已打开: ' + JSON.stringify(res), 'SUCCESS');
             })
@@ -733,7 +796,7 @@ async function submitEdit() {
     showToast('检查授权...', 1000);
     var xhrAuth = new XMLHttpRequest();
     xhrAuth.open('POST', API_BASE + '/api_ai_record.php', true);
-    xhrAuth.timeout = 15000;
+    xhrAuth.timeout = 30000;
     await addSigToXhr(xhrAuth, { action: 'check_auth', device_id: devCode });
     xhrAuth.onload = function() {
         debugLog('授权检查响应: ' + xhrAuth.status + ' ' + xhrAuth.responseText.substring(0,150), 'NETWORK');
@@ -749,7 +812,7 @@ async function submitEdit() {
         }
     };
     xhrAuth.onerror = function() { debugLog('❌ 授权网络异常', 'ERROR'); showToast('授权网络异常，请检查网络'); };
-    xhrAuth.ontimeout = function() { debugLog('❌ 授权检查超时 (15s)', 'ERROR'); showToast('授权检查超时，请重试'); };
+    xhrAuth.ontimeout = function() { debugLog('❌ 授权检查超时 (30s)', 'ERROR'); showToast('授权检查超时，请重试'); };
     var fdAuth = new FormData();
     fdAuth.append('action', 'check_auth');
     fdAuth.append('device_id', devCode);
@@ -1181,6 +1244,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Notifier) {
         Capacitor.Plugins.Notifier.requestPermission().catch(function() {});
     }
+
+    // 安卓平台定制：隐藏所有保存按钮（禁止本地保存）
+    if (window.Capacitor && Capacitor.getPlatform() === 'android') {
+        document.querySelectorAll('button[onclick="saveToAlbum()"], button[onclick="saveFromHistory()"]').forEach(function(btn) {
+            btn.style.display = 'none';
+        });
+        debugLog('安卓平台：已隐藏保存按钮', 'LIFECYCLE');
+    }
     
     // 调试框拖动功能 - window捕获模式，彻底解决事件冲突
     (function() {
@@ -1509,25 +1580,32 @@ function saveToAlbum() {
     }
 }
 
-// 继续创作（保留图片和提示词）
+// 继续创作（用生成后的图片作为新输入）
 function continueCreate() {
     document.getElementById('resultCard').classList.remove('show');
     document.getElementById('uploadCard').style.display = 'none';
     document.getElementById('previewCard').classList.add('show');
     document.getElementById('inputCard').style.display = 'block';
     document.getElementById('generateBtn').style.display = 'block';
-    
-    // 恢复原图和提示词
-    if (originalImageData) {
+    if (resultImageUrl) {
+        showToast('正在加载生成后的图片...', 1000);
+        fetch(resultImageUrl).then(function(res) { return res.blob(); }).then(function(blob) {
+            var ext = blob.type === 'image/png' ? 'png' : 'jpg';
+            selectedFile = new File([blob], 'generated_' + Date.now() + '.' + ext, { type: blob.type || 'image/jpeg' });
+            var reader = new FileReader();
+            reader.onload = function(e) { originalImageData = e.target.result; document.getElementById('previewImg').src = e.target.result; };
+            reader.readAsDataURL(selectedFile);
+        }).catch(function(e) {
+            debugLog('加载生成图片失败: ' + e.message, 'ERROR');
+            if (originalImageData) document.getElementById('previewImg').src = originalImageData;
+        });
+    } else if (originalImageData) {
         document.getElementById('previewImg').src = originalImageData;
     }
-    if (lastPrompt) {
-        document.getElementById('promptInput').value = lastPrompt;
-    }
-    
-    // 切换到创作 tab
+    if (lastPrompt) document.getElementById('promptInput').value = lastPrompt;
+    resultShown = false;
     switchTab('create');
-    showToast('已保留图片和提示词', 1500);
+    showToast('已使用生成后的图片继续创作', 1500);
 }
 
 function resetAll() {
@@ -1541,11 +1619,16 @@ function resetAll() {
 }
 
 function loadHistory() {
+    loadImageHistory();
+    loadChatHistory();
+}
+
+function loadImageHistory() {
     var hist = JSON.parse(localStorage.getItem('edit_history') || '[]');
     var grid = document.getElementById('historyGrid');
     grid.innerHTML = '';
     if (hist.length === 0) {
-        grid.innerHTML = '<div class="history-empty">还没有历史记录<br>去创作一张吧</div>';
+        grid.innerHTML = '<div class="history-empty">还没有图片记录</div>';
         return;
     }
     hist.forEach(function(item, idx) {
@@ -1557,6 +1640,74 @@ function loadHistory() {
         div.appendChild(img);
         grid.appendChild(div);
     });
+}
+
+// 加载 AI 对话（文字）列表：从原生插件读取会话，每组对话一个条目
+function loadChatHistory() {
+    var listEl = document.getElementById('chatHistoryList');
+    if (!listEl) return;
+    if (!window.Capacitor || !Capacitor.Plugins || !Capacitor.Plugins.AIChatPlugin) {
+        listEl.innerHTML = '<div class="chat-empty">当前版本不支持 AI 对话</div>';
+        return;
+    }
+    var devCode = getDeviceCode();
+    Capacitor.Plugins.AIChatPlugin.listSessions({ deviceCode: devCode })
+        .then(function(res) {
+            var sessions = (res && res.sessions) || [];
+            if (sessions.length === 0) {
+                listEl.innerHTML = '<div class="chat-empty">还没有对话记录</div>';
+                return;
+            }
+            var html = '';
+            sessions.forEach(function(s) {
+                html += '<div class="chat-item" onclick="openChatSession(\'' + s.id + '\')">'
+                      +   '<div class="chat-item-icon">'
+                      +     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
+                      +   '</div>'
+                      +   '<div class="chat-item-body">'
+                      +     '<div class="chat-item-title">' + escHtml(s.title || '对话') + '</div>'
+                      +     '<div class="chat-item-preview">' + escHtml(s.preview || '') + '</div>'
+                      +     '<div class="chat-item-time">' + fmtChatTime(s.updatedAt) + '</div>'
+                      +   '</div>'
+                      + '</div>';
+            });
+            listEl.innerHTML = html;
+        })
+        .catch(function(err) {
+            listEl.innerHTML = '<div class="chat-empty">对话记录加载失败</div>';
+        });
+}
+
+// 点击某组对话 → 打开原生完整对话界面
+function openChatSession(sessionId) {
+    if (!window.Capacitor || !Capacitor.Plugins || !Capacitor.Plugins.AIChatPlugin) {
+        showToast('当前版本不支持 AI 对话');
+        return;
+    }
+    var devCode = getDeviceCode();
+    Capacitor.Plugins.AIChatPlugin.openSession({ deviceCode: devCode, sessionId: sessionId })
+        .then(function() { debugLog('已打开会话 ' + sessionId, 'SUCCESS'); })
+        .catch(function(err) {
+            debugLog('打开会话失败: ' + JSON.stringify(err), 'ERROR');
+            showToast('打开失败: ' + (err && err.message ? err.message : ''));
+        });
+}
+
+function fmtChatTime(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    var now = new Date();
+    function pad(n) { return n < 10 ? '0' + n : '' + n; }
+    if (d.toDateString() === now.toDateString()) {
+        return '今天 ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+function escHtml(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function openHistory(idx) {
@@ -1618,11 +1769,31 @@ function continueFromHistory() {
         });
 }
 
+// 清空图片记录
 function clearHistory() {
-    showConfirm('确定清空所有历史记录吗？', function(){
+    showConfirm('确定清空所有图片记录吗？', function(){
         localStorage.removeItem('edit_history');
-        loadHistory();
-        showToast('已清空');
+        loadImageHistory();
+        showToast('图片记录已清空');
+    });
+}
+
+// 清空全部历史（图片 + AI 对话）
+function clearHistoryAll() {
+    showConfirm('确定清空所有图片记录和 AI 对话吗？此操作不可撤销。', function(){
+        // 清图片记录
+        localStorage.removeItem('edit_history');
+        loadImageHistory();
+        // 清 AI 对话（原生）
+        if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.AIChatPlugin) {
+            var devCode = getDeviceCode();
+            Capacitor.Plugins.AIChatPlugin.clearAllSessions({ deviceCode: devCode })
+                .then(function() { loadChatHistory(); })
+                .catch(function() { loadChatHistory(); });
+        } else {
+            loadChatHistory();
+        }
+        showToast('已全部清空');
     });
 }
 

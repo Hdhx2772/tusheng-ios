@@ -165,6 +165,12 @@ final class ChatStore: ObservableObject {
         save()
     }
 
+    // 清空全部会话（Web 历史页"清空文字对话"）
+    func clearAllSessions() {
+        sessions.removeAll()
+        save()
+    }
+
     func clearSession(_ id: UUID) {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
         sessions[i].messages.removeAll()
