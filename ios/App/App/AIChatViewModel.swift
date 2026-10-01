@@ -64,6 +64,8 @@ final class AIChatViewModel: ObservableObject {
     // MARK: - SSE 流式请求
     // isRetry=true 表示自动重连：不再新增占位气泡，复用现有 streaming 气泡继续输出
     private func sendStreamRequest(text: String, isRetry: Bool = false) async {
+        // 进入流式：开启节流写盘模式（重连也要重新开启，避免恢复为逐 delta 写盘）
+        store?.beginStreaming()
         guard let url = URL(string: apiURL) else {
             if !isRetry {
                 store?.failAssistant("无效的 API 地址", id: sessionId)

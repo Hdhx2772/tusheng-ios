@@ -101,7 +101,10 @@ final class ChatStore: ObservableObject {
         sessions.first { $0.id == id }
     }
 
-    // MARK: - 持久化
+    // MARK: - 持久化（写盘节流：流式增量不每次落盘，避免长文本生成时全量序列化风暴）
+    private var saveWorkItem: DispatchWorkItem?
+    private var isStreamingWriteActive = false
+
     private func load() {
         guard let data = try? Data(contentsOf: fileURL) else { return }
         let dec = JSONDecoder()
@@ -111,7 +114,34 @@ final class ChatStore: ObservableObject {
         }
     }
 
+    // 流式增量写入：节流合并，最长 1.5 秒落盘一次（崩溃时最多丢 1.5 秒的增量）
     private func save() {
+        if isStreamingWriteActive {
+            saveWorkItem?.cancel()
+            let item = DispatchWorkItem { [weak self] in
+                self?.performSave()
+            }
+            saveWorkItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: item)
+        } else {
+            performSave()
+        }
+    }
+
+    // 流式期间调用：标记节流模式（ViewModel 发起请求时调用）
+    func beginStreaming() {
+        isStreamingWriteActive = true
+    }
+
+    // 流式结束：立即落盘并恢复立即写入
+    private func endStreaming() {
+        isStreamingWriteActive = false
+        saveWorkItem?.cancel()
+        saveWorkItem = nil
+        performSave()
+    }
+
+    private func performSave() {
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601
         if let data = try? enc.encode(sessions) {
@@ -170,6 +200,7 @@ final class ChatStore: ObservableObject {
         if let mi = sessions[i].messages.lastIndex(where: { $0.isStreaming }) {
             sessions[i].messages[mi].content += chunk
             touch(i)
+            beginStreaming()   // 进入节流写盘模式
             save()
         }
     }
@@ -189,7 +220,7 @@ final class ChatStore: ObservableObject {
             }
             sessions[i].messages[mi].isStreaming = false
             touch(i)
-            save()
+            endStreaming()   // 流式结束，立即落盘
         }
     }
 
@@ -202,7 +233,7 @@ final class ChatStore: ObservableObject {
                 sessions[i].messages[mi].content = "（未返回内容，请重试）"
             }
             touch(i)
-            save()
+            endStreaming()   // 流式结束，立即落盘
         }
     }
 
@@ -213,7 +244,7 @@ final class ChatStore: ObservableObject {
             sessions[i].messages[mi].content = "请求失败：\(msg)"
             sessions[i].messages[mi].isStreaming = false
             touch(i)
-            save()
+            endStreaming()   // 流式结束，立即落盘
         }
     }
 
@@ -231,7 +262,7 @@ final class ChatStore: ObservableObject {
             sessions[i].messages[mi].isStreaming = false
             sessions[i].messages[mi].isInterrupted = true
             touch(i)
-            save()
+            endStreaming()   // 流式结束，立即落盘
         }
     }
 
@@ -249,6 +280,7 @@ final class ChatStore: ObservableObject {
             sessions[i].messages[mi].isInterrupted = false
         }
         touch(i)
+        beginStreaming()   // 即将重新进入流式，恢复节流写盘
         save()
     }
 

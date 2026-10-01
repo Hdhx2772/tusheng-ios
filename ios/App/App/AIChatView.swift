@@ -11,6 +11,8 @@ struct AIChatView: View {
     // 用户是否手动上翻过（看历史）：一旦上翻就停止自动跟随，直到用户发新消息或点"回到底部"
     @State private var userScrolledUp = false
     @State private var scrollProxy: ScrollViewProxy?
+    // 滚动节流：流式增量到达时最多每 0.3s 跟随一次，避免滚动动画风暴导致卡顿
+    @State private var lastAutoScrollTime = Date.distantPast
 
     private let sessionId: UUID
 
@@ -124,8 +126,12 @@ struct AIChatView: View {
                     }
                 }
                 .onChange(of: messages.last?.content) { _ in
-                    // 流式生成中：仅当用户没有手动上翻时才跟随到底部
+                    // 流式生成中：仅当用户没有手动上翻时才跟随到底部；
+                    // 节流控制跟随频率，避免每个 delta 都滚动动画导致卡顿
                     if messages.last?.isStreaming == true && !userScrolledUp {
+                        let now = Date()
+                        guard now.timeIntervalSince(lastAutoScrollTime) > 0.3 else { return }
+                        lastAutoScrollTime = now
                         scrollToBottom(proxy)
                     }
                 }
@@ -136,9 +142,8 @@ struct AIChatView: View {
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
         guard let last = messages.last else { return }
-        withAnimation(.easeOut(duration: 0.2)) {
-            proxy.scrollTo(last.id, anchor: .bottom)
-        }
+        // 无动画直接定位：流式期间频繁跟随，动画叠加反而更卡
+        proxy.scrollTo(last.id, anchor: .bottom)
     }
 
     // MARK: - 空状态
