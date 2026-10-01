@@ -16,6 +16,9 @@ public class AIChatPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc public func openChat(_ call: CAPPluginCall) {
         NSLog("🔍 AIChatPlugin.openChat 被调用")
+        // 由 JS 端从 localStorage 传入设备码，保证与图片生成模块共用同一个已授权设备码
+        let deviceCode = call.getString("deviceCode") ?? ""
+        NSLog("🔍 AIChatPlugin 收到设备码: \(deviceCode)")
         DispatchQueue.main.async { [weak self] in
             guard let self = self else {
                 NSLog("❌ AIChatPlugin self 为 nil")
@@ -24,7 +27,7 @@ public class AIChatPlugin: CAPPlugin, CAPBridgedPlugin {
             }
 
             NSLog("🔍 AIChatPlugin 开始创建聊天界面")
-            let chatView = AIChatView()
+            let chatView = AIChatView(deviceCode: deviceCode)
             let hostingController = UIHostingController(rootView: chatView)
             hostingController.modalPresentationStyle = .fullScreen
 

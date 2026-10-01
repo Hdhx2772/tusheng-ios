@@ -6,7 +6,7 @@ struct ChatMessage: Identifiable, Equatable {
     let role: MessageRole
     var content: String
     var isStreaming: Bool = false
-    
+
     enum MessageRole: String {
         case user
         case assistant
@@ -34,45 +34,57 @@ final class AIChatViewModel: ObservableObject {
     @Published var inputText: String = ""
     @Published var showAuthAlert: Bool = false
     @Published var authMessage: String = ""
-    
+    @Published var isCheckingAuth: Bool = true
+
     private var chatId: String? = nil
     private var urlSession: URLSession?
     private var dataTask: URLSessionDataTask?
     private var sseDelegate: SSEDelegate?
-    
+
+    // 授权状态缓存：打开界面时只验证一次，本次会话内不再重复请求授权接口
+    private var hasCheckedAuth = false
+    private var authorized = false
+
     // 授权配置
     private let authURL = "https://wutong.xyz/api_ai_record.php"
     private let recordURL = "https://wutong.xyz/api_ai_record.php"
     private let apiURL = "https://nottrack.ai/api/dispatch"
-    
-    // 设备码
-    private var deviceCode: String {
-        if let saved = UserDefaults.standard.string(forKey: "dev_code") {
-            return saved
-        }
-        let code = "DEV_" + UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(16).lowercased()
-        UserDefaults.standard.set(code, forKey: "dev_code")
-        return code
-    }
-    
-    init() {
+
+    // 设备码：由 JS 端从 localStorage 读取后传入，与图片生成模块共用同一个已授权设备码
+    private let deviceCode: String
+
+    init(deviceCode: String) {
+        self.deviceCode = deviceCode
         // 普通请求用的 session
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         urlSession = URLSession(configuration: config)
     }
-    
+
+    // MARK: - 打开界面时检查一次授权
+    func checkAuthOnOpen() async {
+        guard !hasCheckedAuth else { return }
+        isCheckingAuth = true
+        authorized = await checkAuthorization()
+        hasCheckedAuth = true
+        isCheckingAuth = false
+        if !authorized {
+            authMessage = "当前设备未授权，请联系管理员授权后使用\n设备码：\(deviceCode)"
+            showAuthAlert = true
+        }
+    }
+
     // MARK: - 检查授权
     func checkAuthorization() async -> Bool {
-        guard let url = URL(string: authURL) else { return false }
-        
+        guard let url = URL(string: authURL), !deviceCode.isEmpty else { return false }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        
+
         let body = "action=check_auth&device_id=\(deviceCode)"
         request.httpBody = body.data(using: .utf8)
-        
+
         do {
             let (data, _) = try await urlSession!.data(for: request)
             if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -88,66 +100,74 @@ final class AIChatViewModel: ObservableObject {
         }
         return false
     }
-    
-    // MARK: - 记录使用
-    private func recordUsage() async {
-        guard let url = URL(string: recordURL) else { return }
-        
+
+    // MARK: - 记录使用（复用后台 upload 动作，后台可见记录并累加使用次数）
+    private func recordUsage(prompt: String) async {
+        guard let url = URL(string: recordURL), !deviceCode.isEmpty else { return }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        
-        let body = "action=record&device_id=\(deviceCode)&type=ai_chat"
-        request.httpBody = body.data(using: .utf8)
-        
+
+        var components = URLComponents()
+        components.queryItems = [
+            URLQueryItem(name: "action", value: "upload"),
+            URLQueryItem(name: "device_id", value: deviceCode),
+            URLQueryItem(name: "prompt", value: "[AI对话] " + prompt)
+        ]
+        request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
+
         _ = try? await urlSession!.data(for: request)
     }
-    
+
     // MARK: - 发送消息
     func sendMessage() async {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isLoading else { return }
-        
-        // 检查授权
-        let authorized = await checkAuthorization()
+
+        // 授权在打开界面时已检查并缓存，这里直接用缓存结果；若尚未检查则补一次
+        if !hasCheckedAuth {
+            authorized = await checkAuthorization()
+            hasCheckedAuth = true
+        }
         guard authorized else {
-            authMessage = "未授权，请先在后台授权设备"
+            authMessage = "当前设备未授权，请联系管理员授权后使用\n设备码：\(deviceCode)"
             showAuthAlert = true
             return
         }
-        
+
         inputText = ""
         isLoading = true
-        
+
         // 添加用户消息
         let userMessage = ChatMessage(role: .user, content: text)
         messages.append(userMessage)
-        
+
         // 添加 AI 占位消息
         let assistantMessage = ChatMessage(role: .assistant, content: "", isStreaming: true)
         messages.append(assistantMessage)
-        
-        // 记录使用
-        await recordUsage()
-        
+
+        // 后台记录使用
+        await recordUsage(prompt: text)
+
         // 发送流式请求
         await sendStreamRequest(text: text)
     }
-    
+
     // MARK: - 发送 SSE 流式请求
     private func sendStreamRequest(text: String) async {
         guard let url = URL(string: apiURL) else {
             finishWithError("无效的 API 地址")
             return
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/147.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
         request.setValue("https://nottrack.ai", forHTTPHeaderField: "Origin")
         request.setValue("https://nottrack.ai/zh-CN/chat", forHTTPHeaderField: "Referer")
-        
+
         let payload: [String: Any] = [
             "user_input": text,
             "mode": "usual",
@@ -161,35 +181,35 @@ final class AIChatViewModel: ObservableObject {
             "edit_mid": NSNull(),
             "via": "typed"
         ]
-        
+
         request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
-        
+
         // 创建 SSE delegate
         let delegate = SSEDelegate { [weak self] event in
             self?.handleSSEEvent(event)
         }
         self.sseDelegate = delegate
-        
+
         // 流式请求用的 session
         let streamConfig = URLSessionConfiguration.default
         streamConfig.timeoutIntervalForRequest = 120
         streamConfig.timeoutIntervalForResource = 300
         let streamSession = URLSession(configuration: streamConfig, delegate: delegate, delegateQueue: .main)
-        
+
         // 使用 withCheckedContinuation 等待任务完成
         await withCheckedContinuation { continuation in
             delegate.onComplete = {
                 continuation.resume()
             }
-            
+
             let task = streamSession.dataTask(with: request)
             self.dataTask = task
             task.resume()
         }
-        
+
         isLoading = false
     }
-    
+
     // MARK: - 处理 SSE 事件
     private func handleSSEEvent(_ event: SSEEvent) {
         switch event.type {
@@ -214,7 +234,7 @@ final class AIChatViewModel: ObservableObject {
             break
         }
     }
-    
+
     // MARK: - 错误处理
     private func finishWithError(_ message: String) {
         if let index = messages.lastIndex(where: { $0.isStreaming }) {
@@ -223,13 +243,13 @@ final class AIChatViewModel: ObservableObject {
         }
         isLoading = false
     }
-    
+
     // MARK: - 清空对话
     func clearChat() {
         messages.removeAll()
         chatId = nil
     }
-    
+
     // MARK: - 停止生成
     func stopGeneration() {
         dataTask?.cancel()
@@ -245,19 +265,19 @@ class SSEDelegate: NSObject, URLSessionDataDelegate {
     private var buffer = ""
     private let onEvent: (SSEEvent) -> Void
     var onComplete: (() -> Void)?
-    
+
     init(onEvent: @escaping (SSEEvent) -> Void) {
         self.onEvent = onEvent
     }
-    
+
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         guard let text = String(data: data, encoding: .utf8) else { return }
         buffer += text
-        
+
         // 按空行分割事件
         let events = buffer.components(separatedBy: "\n\n")
         buffer = events.last ?? ""
-        
+
         for eventText in events.dropLast() {
             let lines = eventText.components(separatedBy: "\n")
             for line in lines {
@@ -273,7 +293,7 @@ class SSEDelegate: NSObject, URLSessionDataDelegate {
             }
         }
     }
-    
+
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let error = error {
             print("请求完成，错误: \(error)")

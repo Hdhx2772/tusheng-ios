@@ -2,21 +2,28 @@ import SwiftUI
 
 // MARK: - AI 对话主界面
 struct AIChatView: View {
-    @StateObject private var viewModel = AIChatViewModel()
+    @StateObject private var viewModel: AIChatViewModel
     @FocusState private var isInputFocused: Bool
     @Environment(\.presentationMode) private var presentationMode
-    
+
+    private let deviceCode: String
+
+    init(deviceCode: String) {
+        self.deviceCode = deviceCode
+        _viewModel = StateObject(wrappedValue: AIChatViewModel(deviceCode: deviceCode))
+    }
+
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
                 // 消息列表
                 messageList
-                
+
                 // 输入区域
                 inputBar
             }
             .navigationBarTitle("AI 对话")
-            
+
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("关闭") {
@@ -39,6 +46,10 @@ struct AIChatView: View {
                 Button("确定", role: .cancel) { }
             } message: {
                 Text(viewModel.authMessage)
+            }
+            // 打开界面时只检查一次授权，本次会话内缓存结果
+            .task {
+                await viewModel.checkAuthOnOpen()
             }
         }
     }
