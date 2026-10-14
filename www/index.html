@@ -597,6 +597,7 @@ function getExifOrientation(file, callback) {
         callback(1);
     };
     reader.readAsArrayBuffer(file.slice(0, 64 * 1024));
+    reader.onerror = function() { callback(1); };
 }
 
 // 用 Canvas 修正图片方向
@@ -627,6 +628,7 @@ function fixImageOrientation(file, callback) {
                 callback(blob);
             }, mimeType, quality);
         };
+        img.onerror = function() { callback(file); };
         img.src = URL.createObjectURL(file);
     });
 }
@@ -667,32 +669,44 @@ function compressImage(file, maxSize, quality, callback) {
 
 function handleFile(file) {
     debugLog('handleFile 开始: ' + file.name + ' (' + (file.size/1024).toFixed(0) + 'KB, ' + file.type + ')', 'INFO');
-    var allowed = ['image/jpeg','image/png','image/webp'];
-    if (allowed.indexOf(file.type) === -1) { showToast('只支持 JPG、PNG、WebP'); debugLog('文件类型不支持: ' + file.type, 'ERROR'); return; }
-    if (file.size > 10*1024*1024) { showToast('图片不能超过 10MB'); debugLog('文件过大: ' + (file.size/1024/1024).toFixed(2) + 'MB', 'ERROR'); return; }
+    // 不按 file.type 白名单拒绝（iOS 相册 HEIC 也交给 canvas 转 JPEG）
+    if (!file.type || file.type.indexOf('image/') !== 0) { showToast('请选择图片文件'); return; }
+    // 不限制原始大小：先压缩，压缩后再判断
     showToast('正在处理图片...', 800);
     try {
         fixImageOrientation(file, function(fixedFile) {
             debugLog('fixImageOrientation 完成', 'INFO');
             compressImage(fixedFile, 2048, 0.85, function(compressedFile) {
                 debugLog('compressImage 完成: ' + (compressedFile.size/1024).toFixed(0) + 'KB', 'INFO');
-                selectedFile = compressedFile;
-                var reader = new FileReader();
-                reader.onload = function(e) {
-                    originalImageData = e.target.result;
-                    document.getElementById('previewImg').src = e.target.result;
-                    document.getElementById('uploadCard').style.display = 'none';
-                    document.getElementById('previewCard').classList.add('show');
-                    debugLog('图片预览显示成功', 'SUCCESS');
-                };
-                reader.onerror = function() { debugLog('FileReader 读取失败', 'ERROR'); showToast('图片读取失败'); };
-                reader.readAsDataURL(compressedFile);
+                // 压缩后仍超 10MB，再压一次（降尺寸+降质量）
+                if (compressedFile.size > 10*1024*1024) {
+                    compressImage(compressedFile, 1536, 0.7, function(f2) {
+                        debugLog('二次压缩: ' + (f2.size/1024).toFixed(0) + 'KB', 'INFO');
+                        finishPick(f2);
+                    });
+                } else {
+                    finishPick(compressedFile);
+                }
             });
         });
     } catch(err) {
         debugLog('handleFile 异常: ' + err.message, 'ERROR');
         showToast('图片处理失败: ' + err.message);
     }
+}
+
+function finishPick(f) {
+    selectedFile = f;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        originalImageData = e.target.result;
+        document.getElementById('previewImg').src = e.target.result;
+        document.getElementById('uploadCard').style.display = 'none';
+        document.getElementById('previewCard').classList.add('show');
+        debugLog('图片预览显示成功', 'SUCCESS');
+    };
+    reader.onerror = function() { debugLog('FileReader 读取失败', 'ERROR'); showToast('图片读取失败'); };
+    reader.readAsDataURL(f);
 }
 
 function removeImage() {
